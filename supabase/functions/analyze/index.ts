@@ -31,6 +31,35 @@ serve(async (req) => {
 
   try {
     console.log('Analyze function called');
+
+    if (req.method !== 'POST') {
+      throw new Error('Method not allowed');
+    }
+
+    // Create Supabase client for auth
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    // Get user from auth header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'UNAUTHORIZED' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+    
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'UNAUTHORIZED' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     
     const { message, history = [] }: AnalyzeRequest = await req.json();
     

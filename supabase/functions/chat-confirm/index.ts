@@ -9,7 +9,17 @@ import {
   hashIdempotencyKey 
 } from "../_shared/hardening.ts";
 import { isSupportedModel, getModelById } from "../_shared/catalog.ts";
-import { callOpenAI, callAnthropic, callGemini, type ChatArgs, type ChatOut } from "../_shared/providers.ts";
+import { 
+  callOpenAI, 
+  callAnthropic, 
+  callGemini, 
+  resolveProvider,
+  isProviderAvailable,
+  isHttpUnsupportedModel,
+  ProviderError,
+  type ChatArgs, 
+  type ChatOut 
+} from "../_shared/providers.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +30,8 @@ interface ChatConfirmRequest {
   message: string;
   model: string;
   estCostINR: number;
+  temperature?: number;
+  max_tokens?: number;
 }
 
 interface ChatConfirmResponse {
@@ -85,7 +97,7 @@ serve(async (req) => {
       });
     }
 
-    const { message, model, estCostINR }: ChatConfirmRequest = await req.json();
+    const { message, model, estCostINR, temperature, max_tokens }: ChatConfirmRequest = await req.json();
     
     if (!message || !model || typeof estCostINR !== 'number') {
       throw new Error('BAD_INPUT: Missing required fields: message, model, estCostINR');
@@ -94,6 +106,11 @@ serve(async (req) => {
     // Validate model
     if (!isSupportedModel(model)) {
       throw new Error('BAD_INPUT: Unsupported model');
+    }
+
+    // Check if model is HTTP unsupported (e.g., gpt-realtime)
+    if (isHttpUnsupportedModel(model)) {
+      throw new Error('BAD_INPUT: Use realtime channel for this model');
     }
 
     console.log(`[${corrId}] Processing chat confirm for user: ${userId}, model: ${model}, cost: ₹${estCostINR}`);
@@ -227,26 +244,31 @@ serve(async (req) => {
     try {
       console.log(`[${corrId}] Calling AI provider for model: ${model}`);
       
-      // Get model info to determine provider
-      const modelInfo = getModelById(model);
-      if (!modelInfo) {
-        throw new Error('BAD_INPUT: Invalid model ID');
+      // Determine provider from model name
+      const provider = resolveProvider(model);
+      if (provider === 'unknown') {
+        throw new ProviderError('BAD_INPUT', 'Unknown model provider', 400);
       }
       
-      providerName = modelInfo.provider;
+      // Check if provider key is available
+      if (!isProviderAvailable(provider)) {
+        throw new ProviderError('NO_API_KEY', `${provider} API key not configured`, 401);
+      }
+      
+      providerName = provider;
       
       // Prepare chat arguments
       const chatArgs: ChatArgs = {
-        model: modelInfo.model, // Use the exact provider model string
+        model: model,
         messages: [
           { role: 'user', content: message }
         ],
-        temperature: 0.7,
-        max_tokens: 1000
+        temperature: temperature ?? 0.7,
+        max_tokens: max_tokens ?? 1000
       };
       
       // Call the appropriate provider
-      switch (modelInfo.provider) {
+      switch (provider) {
         case 'openai':
           providerResult = await callOpenAI(chatArgs);
           break;
@@ -257,7 +279,7 @@ serve(async (req) => {
           providerResult = await callGemini(chatArgs);
           break;
         default:
-          throw new Error(`NO_API_KEY: Unsupported provider: ${modelInfo.provider}`);
+          throw new ProviderError('NO_API_KEY', `Unsupported provider: ${provider}`, 503);
       }
       
       const callLatency = Date.now() - callStartTime;
@@ -266,7 +288,7 @@ serve(async (req) => {
       // Log successful provider call
       await logOpsEvent(supabaseClient, userId, corrId, 'info', 'PROVIDER_SUCCESS', 'AI provider call completed successfully', {
         provider: providerName,
-        model: modelInfo.model,
+        model: model,
         latencyMs: callLatency,
         tokensIn: providerResult.tokensIn,
         tokensOut: providerResult.tokensOut,
@@ -341,22 +363,30 @@ serve(async (req) => {
       }
       
       // Determine error code from provider error
-      const errorMessage = providerError.message || 'Provider call failed';
       let errorCode = 'SERVICE_UNAVAILABLE';
       let status = 503;
+      let errorMessage = 'Provider call failed';
       
-      if (errorMessage.includes('NO_API_KEY:')) {
-        errorCode = 'NO_API_KEY';
-        status = 503;
-      } else if (errorMessage.includes('UNAUTHORIZED:')) {
-        errorCode = 'UNAUTHORIZED';
-        status = 401;
-      } else if (errorMessage.includes('BAD_INPUT:')) {
-        errorCode = 'BAD_INPUT';
-        status = 400;
-      } else if (errorMessage.includes('RATE_LIMITED:')) {
-        errorCode = 'RATE_LIMITED';
-        status = 429;
+      if (providerError instanceof ProviderError) {
+        errorCode = providerError.code;
+        status = providerError.status;
+        errorMessage = providerError.message;
+      } else {
+        errorMessage = providerError.message || 'Provider call failed';
+        // Legacy string parsing fallback
+        if (errorMessage.includes('NO_API_KEY:')) {
+          errorCode = 'NO_API_KEY';
+          status = 503;
+        } else if (errorMessage.includes('UNAUTHORIZED:')) {
+          errorCode = 'UNAUTHORIZED';
+          status = 401;
+        } else if (errorMessage.includes('BAD_INPUT:')) {
+          errorCode = 'BAD_INPUT';
+          status = 400;
+        } else if (errorMessage.includes('RATE_LIMITED:')) {
+          errorCode = 'RATE_LIMITED';
+          status = 429;
+        }
       }
       
       return new Response(JSON.stringify({

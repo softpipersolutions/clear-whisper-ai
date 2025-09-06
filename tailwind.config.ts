@@ -24,6 +24,11 @@ export default {
 				ring: 'hsl(var(--ring))',
 				background: 'hsl(var(--background))',
 				foreground: 'hsl(var(--foreground))',
+				panel: 'hsl(var(--panel))',
+				brown: {
+					DEFAULT: 'hsl(var(--brown))',
+					foreground: 'hsl(var(--brown-foreground))'
+				},
 				primary: {
 					DEFAULT: 'hsl(var(--primary))',
 					foreground: 'hsl(var(--primary-foreground))'
@@ -63,6 +68,13 @@ export default {
 					ring: 'hsl(var(--sidebar-ring))'
 				}
 			},
+			boxShadow: {
+				'brand': 'var(--shadow-brand)',
+				'brand-hover': 'var(--shadow-brand-hover)'
+			},
+			backdropBlur: {
+				'brand': '20px'
+			},
 			borderRadius: {
 				lg: 'var(--radius)',
 				md: 'calc(var(--radius) - 2px)',
@@ -84,11 +96,21 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				shimmer: {
+					'0%': { transform: 'translateX(-100%)' },
+					'100%': { transform: 'translateX(100%)' }
+				},
+				'cursor-blink': {
+					'0%, 50%': { opacity: '1' },
+					'51%, 100%': { opacity: '0' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				shimmer: 'shimmer 1.2s ease-in-out infinite',
+				'cursor-blink': 'cursor-blink 1s ease-in-out infinite'
 			}
 		}
 	},

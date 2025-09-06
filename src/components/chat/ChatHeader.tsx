@@ -35,9 +35,9 @@ const ChatHeader = () => {
   };
 
   return (
-    <div className="p-4 flex items-center justify-between">
+    <div className="sticky top-0 p-4 flex items-center justify-between bg-panel/80 backdrop-blur-brand border-b border-border">
       <div className="flex items-center gap-2">
-        <Badge variant={getPhaseColor()}>
+        <Badge variant={getPhaseColor()} className="shadow-sm">
           {getPhaseDisplay()}
         </Badge>
         {model && (
@@ -49,7 +49,7 @@ const ChatHeader = () => {
       
       <div className="flex items-center gap-2">
         {phase === 'executing' && (
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-accent rounded-full animate-pulse shadow-sm" />
         )}
       </div>
     </div>

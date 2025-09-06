@@ -72,7 +72,7 @@ const ChatComposer = () => {
               onClick={handleStop}
               variant="destructive"
               size="icon"
-              className="h-[60px] w-12"
+              className="h-[60px] w-12 shadow-brand hover:shadow-brand-hover transition-all duration-200"
             >
               <Square size={16} />
             </Button>
@@ -81,7 +81,7 @@ const ChatComposer = () => {
               onClick={handleSubmit}
               disabled={!canSubmit}
               size="icon"
-              className="h-[60px] w-12"
+              className="h-[60px] w-12 bg-accent hover:bg-accent/90 text-accent-foreground shadow-brand hover:shadow-brand-hover transition-all duration-200"
             >
               <Send size={16} />
             </Button>

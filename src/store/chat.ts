@@ -108,8 +108,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     } catch (error) {
       console.error('All estimation methods failed:', error);
+      
+      // Normalize error message for better UX
+      const errorMessage = error && typeof error === 'object' && 'type' in error 
+        ? (error as any).message || 'Estimation failed'
+        : error instanceof Error 
+        ? error.message 
+        : 'Estimation failed';
+      
       set({ 
-        error: error instanceof Error ? error.message : 'Estimation failed',
+        error: errorMessage,
         phase: 'idle'
       });
     }
@@ -147,22 +155,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
         let errorMessage = 'Chat confirmation failed';
         switch (confirmResult.error) {
           case 'INSUFFICIENT_FUNDS':
-            errorMessage = 'INSUFFICIENT_FUNDS';
+            errorMessage = 'Insufficient funds in your wallet. Please recharge to continue.';
             break;
           case 'NO_API_KEY':
-            errorMessage = 'Provider key not configured';
+            errorMessage = 'Provider key not configured. Please contact support.';
             break;
           case 'RATE_LIMITED':
-            errorMessage = 'Too many requests. Please wait a moment.';
+            errorMessage = 'Too many requests. Please wait a moment and try again.';
             break;
           case 'SERVICE_UNAVAILABLE':
-            errorMessage = 'AI service is temporarily unavailable';
+            errorMessage = 'AI service is temporarily unavailable. Please try again later.';
             break;
           case 'UNAUTHORIZED':
-            errorMessage = 'Authentication failed';
+            errorMessage = 'Authentication failed. Please refresh and try again.';
             break;
           default:
-            errorMessage = confirmResult.message || 'Chat confirmation failed';
+            errorMessage = confirmResult.message || 'Chat confirmation failed. Please try again.';
         }
         
         set({ 

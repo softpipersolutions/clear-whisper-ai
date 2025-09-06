@@ -165,7 +165,7 @@ const normalizeError = (error: any): BackendError => {
 export const callFunction = async <T>(
   functionName: string, 
   body?: any, 
-  timeoutMs: number = 1500
+  timeoutMs: number = 15000
 ): Promise<T> => {
   try {
     // Standardize on POST via invoke; omit 'body' if none

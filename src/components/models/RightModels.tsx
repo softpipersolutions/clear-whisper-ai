@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useEffect } from "react";
 
 const RightModels = () => {
-  const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation } = useChatStore();
+  const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation, query, startStream } = useChatStore();
   const { user } = useAuthStore();
   const { convertFromINR, fetchFxRate, isStale, rates, error: fxError } = useFxStore();
   const { models: allModels, pricing, fx, loading: modelsLoading, fetchModels, forceRefresh } = useModelsStore();
@@ -231,7 +231,15 @@ const RightModels = () => {
                       ? 'opacity-60 cursor-not-allowed shadow-brand'
                       : 'hover:bg-muted/30 shadow-brand hover:shadow-brand-hover'
                   }`}
-                  onClick={() => !model.locked && selectModel(model.id)}
+                  onClick={() => {
+                    if (model.locked) return;
+                    selectModel(model.id);
+                    
+                    // Auto-start chat if user has typed a query and we're ready
+                    if (query.trim() && phase === 'ready') {
+                      startStream(query, model.id);
+                    }
+                  }}
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between mb-2">

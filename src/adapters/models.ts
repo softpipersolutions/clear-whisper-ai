@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { callFunction } from "@/adapters/backend";
 
 export interface ModelInfo {
   id: string;
@@ -38,14 +38,8 @@ export interface ModelsResponse {
 
 export async function fetchModels(): Promise<ModelsResponse> {
   try {
-    const { data, error } = await supabase.functions.invoke('models');
-
-    if (error) {
-      console.error('Models function error:', error);
-      throw new Error('Failed to fetch models');
-    }
-
-    return data as ModelsResponse;
+    const data = await callFunction<ModelsResponse>('models');
+    return data;
   } catch (error) {
     console.error('Error fetching models:', error);
     throw error;

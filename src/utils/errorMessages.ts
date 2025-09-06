@@ -17,6 +17,8 @@ export function mapErrorCodeToMessage(errorCode: string, retryAfter?: number): s
       return 'Invalid request. Please check your input and try again.';
     case 'NETWORK':
       return 'Network error. Please check your connection and try again.';
+    case 'METHOD_MISMATCH':
+      return 'Method mismatch; please refresh.';
     default:
       return 'An unexpected error occurred. Please try again.';
   }

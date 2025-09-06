@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { methodGuard } from "../_shared/http.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,17 +9,13 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const guard = methodGuard(req, ['GET', 'POST']);
+  if (guard) return guard;
+
+  const corrId = crypto.randomUUID().slice(0, 8);
 
   try {
-    console.log('Get wallet function called');
-
-    if (req.method !== 'GET') {
-      throw new Error('Method not allowed');
-    }
+    console.log(`[${corrId}] Get wallet function called (${req.method})`);
 
     // Create Supabase client with anon key for auth
     const supabaseClient = createClient(
@@ -74,9 +71,10 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error in get-wallet function:', error);
+    console.error(`[${corrId}] Error in get-wallet function:`, error);
     return new Response(JSON.stringify({ 
-      error: error.message || 'Internal server error' 
+      error: error.message || 'Internal server error',
+      corrId
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

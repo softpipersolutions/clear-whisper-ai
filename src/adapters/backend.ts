@@ -162,16 +162,16 @@ const normalizeError = (error: any): BackendError => {
 };
 
 // Helper function to make Supabase function calls with timeout
-const callFunction = async <T>(
+export const callFunction = async <T>(
   functionName: string, 
   body?: any, 
   timeoutMs: number = 1500
 ): Promise<T> => {
   try {
-    // Frontend fix: Use GET when no body is provided, POST when body exists
-    const functionCall = body !== undefined 
-      ? supabase.functions.invoke(functionName, { body })  // POST
-      : supabase.functions.invoke(functionName);           // GET
+    // Standardize on POST via invoke; omit 'body' if none
+    const functionCall = body === undefined 
+      ? supabase.functions.invoke(functionName)
+      : supabase.functions.invoke(functionName, { body });
     const timeoutPromise = createTimeoutPromise(timeoutMs);
     
     const result = await Promise.race([functionCall, timeoutPromise]);

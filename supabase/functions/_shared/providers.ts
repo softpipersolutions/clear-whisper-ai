@@ -112,11 +112,13 @@ export async function callOpenAI(args: ChatArgs | any): Promise<ChatOut> {
   const isGPT5Series = args.model?.startsWith('gpt-5');
   const isGPT41Series = args.model?.startsWith('gpt-4.1');
   const isReasoningModel = args.model?.startsWith('o1') || args.model?.startsWith('o3') || args.model?.startsWith('o4');
+  const isLegacyModel = args.model?.startsWith('gpt-4o') || args.model?.startsWith('gpt-4');
 
-  // Temperature handling (not supported by reasoning models)
-  if (args.temperature !== undefined && !isReasoningModel) {
+  // Temperature handling - only for models that support it
+  if (args.temperature !== undefined && (isLegacyModel || isGPT41Series)) {
     body.temperature = args.temperature;
   }
+  // GPT-5 and reasoning models don't support custom temperature (they use default 1.0)
 
   // Token limit handling (different parameter names for different model families)
   if (args.max_tokens !== undefined) {
@@ -151,15 +153,17 @@ export async function callOpenAI(args: ChatArgs | any): Promise<ChatOut> {
   }
 
   // Set reasonable defaults if nothing specified
-  if (body.temperature === undefined && body.max_tokens === undefined && body.max_completion_tokens === undefined) {
-    if (!isReasoningModel) {
-      body.temperature = 0.3;
-    }
+  if (body.max_tokens === undefined && body.max_completion_tokens === undefined) {
     if (isGPT5Series || isReasoningModel) {
       body.max_completion_tokens = 512;
     } else {
       body.max_tokens = 512;
     }
+  }
+
+  // Only set default temperature for models that support it
+  if (body.temperature === undefined && (isLegacyModel || isGPT41Series)) {
+    body.temperature = 0.3;
   }
 
   console.log('🚀 OpenAI API request body:', JSON.stringify(body, null, 2));

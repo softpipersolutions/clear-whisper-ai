@@ -74,6 +74,34 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
     }
   },
   {
+    id: 'gpt-4.1-2025-01-29',
+    provider: 'openai',
+    label: 'GPT-4.1',
+    model: 'gpt-4.1-2025-01-29',
+    family: 'gpt-4',
+    tags: ['Advanced', 'Reliable', 'Latest'],
+    pricingUSD: {
+      inputPer1M: 3.00,
+      outputPer1M: 12.00,
+      cachedInputPer1M: 1.50,
+      unit: 'tokens'
+    }
+  },
+  {
+    id: 'gpt-4.1-mini-2025-01-29',
+    provider: 'openai',
+    label: 'GPT-4.1 Mini',
+    model: 'gpt-4.1-mini-2025-01-29',
+    family: 'gpt-4',
+    tags: ['Fast', 'Budget', 'Efficient'],
+    pricingUSD: {
+      inputPer1M: 0.20,
+      outputPer1M: 0.80,
+      cachedInputPer1M: 0.10,
+      unit: 'tokens'
+    }
+  },
+  {
     id: 'gpt-4o',
     provider: 'openai',
     label: 'GPT-4o',
@@ -98,6 +126,32 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
       inputPer1M: 0.15,
       outputPer1M: 0.60,
       cachedInputPer1M: 0.075,
+      unit: 'tokens'
+    }
+  },
+  {
+    id: 'o1-2024-12-17',
+    provider: 'openai',
+    label: 'o1',
+    model: 'o1-2024-12-17',
+    family: 'o1',
+    tags: ['Reasoning', 'Complex', 'Analysis'],
+    pricingUSD: {
+      inputPer1M: 15.00,
+      outputPer1M: 60.00,
+      unit: 'tokens'
+    }
+  },
+  {
+    id: 'o1-mini-2024-09-12',
+    provider: 'openai',
+    label: 'o1 Mini',
+    model: 'o1-mini-2024-09-12',
+    family: 'o1',
+    tags: ['Reasoning', 'Fast', 'Budget'],
+    pricingUSD: {
+      inputPer1M: 3.00,
+      outputPer1M: 12.00,
       unit: 'tokens'
     }
   },
@@ -131,15 +185,80 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
       unit: 'tokens'
     }
   },
+  {
+    id: 'claude-3-opus-20240229',
+    provider: 'anthropic',
+    label: 'Claude 3 Opus',
+    model: 'claude-3-opus-20240229',
+    family: 'claude-3',
+    tags: ['Advanced', 'Complex', 'Premium'],
+    pricingUSD: {
+      inputPer1M: 15.00,
+      outputPer1M: 75.00,
+      unit: 'tokens'
+    }
+  },
 
   // GOOGLE GEMINI (Gemini API)
   {
-    id: 'models/gemini-2.5-flash',
+    id: 'gemini-2.5-pro',
+    provider: 'google',
+    label: 'Gemini 2.5 Pro',
+    model: 'models/gemini-2.5-pro',
+    family: 'gemini-2',
+    tags: ['Advanced', 'Thinking', 'Multimodal'],
+    pricingUSD: {
+      inputPer1M: 1.25,
+      outputPer1M: 5.00,
+      unit: 'tokens'
+    }
+  },
+  {
+    id: 'gemini-2.5-flash',
     provider: 'google',
     label: 'Gemini 2.5 Flash',
     model: 'models/gemini-2.5-flash',
     family: 'gemini-2',
-    tags: ['Google', 'Multimodal', 'Fast'],
+    tags: ['Fast', 'Thinking', 'Multimodal'],
+    pricingUSD: {
+      inputPer1M: 0.35,
+      outputPer1M: 1.05,
+      unit: 'tokens'
+    }
+  },
+  {
+    id: 'gemini-2.0-flash',
+    provider: 'google',
+    label: 'Gemini 2.0 Flash',
+    model: 'models/gemini-2.0-flash',
+    family: 'gemini-2',
+    tags: ['Fast', 'Multimodal', 'Latest'],
+    pricingUSD: {
+      inputPer1M: 0.30,
+      outputPer1M: 1.20,
+      unit: 'tokens'
+    }
+  },
+  {
+    id: 'gemini-1.5-pro',
+    provider: 'google',
+    label: 'Gemini 1.5 Pro',
+    model: 'models/gemini-1.5-pro',
+    family: 'gemini-1',
+    tags: ['Advanced', 'Long Context', 'Legacy'],
+    pricingUSD: {
+      inputPer1M: 1.25,
+      outputPer1M: 5.00,
+      unit: 'tokens'
+    }
+  },
+  {
+    id: 'gemini-1.5-flash',
+    provider: 'google',
+    label: 'Gemini 1.5 Flash',
+    model: 'models/gemini-1.5-flash',
+    family: 'gemini-1',
+    tags: ['Fast', 'Budget', 'Legacy'],
     pricingUSD: {
       inputPer1M: 0.35,
       outputPer1M: 1.05,

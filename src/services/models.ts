@@ -7,6 +7,7 @@ export interface ModelInfo {
 }
 
 export const CATALOG: ModelInfo[] = [
+  // OpenAI Models
   {
     id: 'gpt-5-2025-08-07',
     name: 'GPT-5',
@@ -29,6 +30,20 @@ export const CATALOG: ModelInfo[] = [
     context: 128000
   },
   {
+    id: 'gpt-4.1-2025-01-29',
+    name: 'GPT-4.1',
+    badges: ['Advanced', 'Reliable'],
+    latencyMs: 1100,
+    context: 128000
+  },
+  {
+    id: 'gpt-4.1-mini-2025-01-29',
+    name: 'GPT-4.1 Mini',
+    badges: ['Fast', 'Budget'],
+    latencyMs: 900,
+    context: 128000
+  },
+  {
     id: 'gpt-4o',
     name: 'GPT-4o',
     badges: ['Fast', 'Multimodal'],
@@ -42,6 +57,22 @@ export const CATALOG: ModelInfo[] = [
     latencyMs: 800,
     context: 128000
   },
+  {
+    id: 'o1-2024-12-17',
+    name: 'o1',
+    badges: ['Reasoning', 'Complex'],
+    latencyMs: 3000,
+    context: 200000
+  },
+  {
+    id: 'o1-mini-2024-09-12',
+    name: 'o1 Mini',
+    badges: ['Reasoning', 'Fast'],
+    latencyMs: 2000,
+    context: 128000
+  },
+
+  // Anthropic Models
   {
     id: 'claude-3-5-sonnet-20241022',
     name: 'Claude 3.5 Sonnet',
@@ -57,9 +88,46 @@ export const CATALOG: ModelInfo[] = [
     context: 200000
   },
   {
-    id: 'models/gemini-2.5-flash',
+    id: 'claude-3-opus-20240229',
+    name: 'Claude 3 Opus',
+    badges: ['Advanced', 'Complex'],
+    latencyMs: 2500,
+    context: 200000
+  },
+
+  // Google Models
+  {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    badges: ['Advanced', 'Thinking'],
+    latencyMs: 1600,
+    context: 2000000
+  },
+  {
+    id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
-    badges: ['Google', 'Multimodal'],
+    badges: ['Fast', 'Thinking'],
+    latencyMs: 1200,
+    context: 1000000
+  },
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    badges: ['Fast', 'Multimodal'],
+    latencyMs: 1400,
+    context: 1000000
+  },
+  {
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
+    badges: ['Advanced', 'Long Context'],
+    latencyMs: 1800,
+    context: 2000000
+  },
+  {
+    id: 'gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash',
+    badges: ['Fast', 'Budget'],
     latencyMs: 1500,
     context: 1000000
   }

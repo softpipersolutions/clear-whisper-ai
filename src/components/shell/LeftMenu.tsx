@@ -1,10 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { useChatStore } from "@/store/chat";
 import ThemeToggle from "@/components/common/ThemeToggle";
-import { Plus, Wallet } from "lucide-react";
+import { Plus, Wallet, RefreshCw } from "lucide-react";
+import { useEffect } from "react";
 
 const LeftMenu = () => {
-  const { wallet, reset } = useChatStore();
+  const { wallet, isLoadingWallet, reset, loadWallet } = useChatStore();
+
+  // Load wallet data on component mount
+  useEffect(() => {
+    loadWallet();
+  }, [loadWallet]);
 
   const handleNewChat = () => {
     reset();
@@ -42,10 +48,25 @@ const LeftMenu = () => {
 
       {/* Wallet */}
       <div className="sticky bottom-0 p-4 border-t border-border bg-panel/80 backdrop-blur-brand">
-        <div className="flex items-center gap-2 text-sm">
-          <Wallet size={16} className="text-brown" />
-          <span className="text-muted-foreground">Wallet:</span>
-          <span className="font-medium text-foreground">₹{wallet.inr.toFixed(2)}</span>
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2">
+            <Wallet size={16} className="text-brown" />
+            <span className="text-muted-foreground">Wallet:</span>
+            {isLoadingWallet ? (
+              <div className="w-12 h-4 bg-muted animate-pulse rounded" />
+            ) : (
+              <span className="font-medium text-foreground">₹{wallet.inr.toFixed(2)}</span>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={loadWallet}
+            disabled={isLoadingWallet}
+            className="h-6 w-6 p-0"
+          >
+            <RefreshCw size={12} className={isLoadingWallet ? "animate-spin" : ""} />
+          </Button>
         </div>
       </div>
     </div>

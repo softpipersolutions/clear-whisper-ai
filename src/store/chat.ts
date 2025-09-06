@@ -15,6 +15,7 @@ export interface ChatState {
   messages: Message[];
   error: string | null;
   wallet: { inr: number };
+  isLoadingWallet: boolean;
   
   // Stream control
   streamController: AbortController | null;
@@ -31,6 +32,7 @@ export interface ChatState {
   addMessage: (message: Message) => void;
   updateLastMessage: (text: string) => void;
   retryLastOperation: () => void;
+  loadWallet: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -43,6 +45,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   error: null,
   wallet: { inr: 0.00 },
+  isLoadingWallet: false,
   streamController: null,
 
   // Actions
@@ -144,8 +147,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set({ wallet: { inr: confirmResult.newBalanceINR } });
       }
     } catch (backendError) {
-      console.warn('Backend confirmation failed, proceeding with mock:', backendError);
-      // Continue with mock streaming - don't block on backend errors for now
+      console.warn('Backend confirmation failed:', backendError);
+      // Set error for insufficient funds or other backend issues
+      if (backendError.type === 'INSUFFICIENT_FUNDS') {
+        set({ error: 'INSUFFICIENT_FUNDS' });
+        return;
+      }
+      set({ error: 'Backend confirmation failed. Please try again.' });
+      return;
     }
 
     const controller = new AbortController();
@@ -232,5 +241,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
   retryLastOperation: () => {
     const { submitQuery } = get();
     submitQuery();
+  },
+
+  loadWallet: async () => {
+    set({ isLoadingWallet: true });
+    try {
+      const backendAdapter = await import('../adapters/backend');
+      const walletData = await backendAdapter.getWallet();
+      set({ 
+        wallet: { inr: walletData.balance_inr },
+        isLoadingWallet: false 
+      });
+    } catch (error) {
+      console.warn('Failed to load wallet data:', error);
+      set({ isLoadingWallet: false });
+      // Keep existing wallet data on error
+    }
   }
 }));

@@ -33,6 +33,13 @@ export interface ChatConfirmResponse {
   error?: string;
 }
 
+export interface WalletResponse {
+  balance_inr: number;
+  balance_display: number;
+  currency: string;
+  updated_at: string;
+}
+
 export interface FxResponse {
   rate: number;
   lastUpdated: string;
@@ -148,4 +155,8 @@ export const postChatConfirm = async (data: {
 
 export const getFx = async (to: string = 'USD'): Promise<FxResponse> => {
   return callFunction<FxResponse>('fx');
+};
+
+export const getWallet = async (): Promise<WalletResponse> => {
+  return callFunction<WalletResponse>('get-wallet');
 };

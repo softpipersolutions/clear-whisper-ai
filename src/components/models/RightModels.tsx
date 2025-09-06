@@ -80,6 +80,10 @@ const RightModels = () => {
           type="error"
           title="Insufficient Funds"
           message="Please add credits to your wallet to continue."
+          onRetry={() => {
+            // In a real app, this would trigger a recharge flow
+            window.alert('Recharge functionality will be implemented with payment integration');
+          }}
         />
       )}
 

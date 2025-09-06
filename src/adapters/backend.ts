@@ -53,6 +53,40 @@ export interface CreateOrderResponse {
   display_currency: string;
 }
 
+export interface AdminStats {
+  totalUsers: number;
+  totalWalletINR: number;
+  totalRechargesINR: number;
+  totalDeductionsINR: number;
+  totalRawCostINR: number;
+  totalDeductedCostINR: number;
+  profitINR: number;
+}
+
+export interface AdminTransaction {
+  id: string;
+  user_id: string;
+  type: string;
+  amount_inr: number;
+  currency: string;
+  raw_cost_inr: number | null;
+  deducted_cost_inr: number | null;
+  created_at: string;
+}
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  country: string;
+  preferred_currency: string;
+  created_at: string;
+  wallet_balance_inr: number;
+  wallet_balance_display: number;
+  wallet_currency: string;
+  wallet_updated_at: string | null;
+}
+
 export interface FxResponse {
   rate: number;
   lastUpdated: string;
@@ -176,4 +210,36 @@ export const getWallet = async (): Promise<WalletResponse> => {
 
 export const createOrder = async (data: CreateOrderRequest): Promise<CreateOrderResponse> => {
   return callFunction<CreateOrderResponse>('create-order', data);
+};
+
+// Admin functions
+export const getAdminStats = async (): Promise<AdminStats> => {
+  return callFunction<AdminStats>('admin-stats');
+};
+
+export const getAdminTransactions = async (params?: {
+  limit?: number;
+  offset?: number;
+  type?: string;
+}): Promise<{
+  transactions: AdminTransaction[];
+  totalCount: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}> => {
+  const queryParams = new URLSearchParams();
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  if (params?.offset) queryParams.append('offset', params.offset.toString());
+  if (params?.type) queryParams.append('type', params.type);
+  
+  const url = queryParams.toString() ? `admin-transactions?${queryParams}` : 'admin-transactions';
+  return callFunction(url);
+};
+
+export const getAdminUsers = async (): Promise<{
+  users: AdminUser[];
+  totalCount: number;
+}> => {
+  return callFunction('admin-users');
 };

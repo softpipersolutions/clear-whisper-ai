@@ -205,7 +205,7 @@ const RightModels = () => {
       {/* Models */}
       <div>
         <h3 className="text-sm font-medium mb-3 text-foreground">Available Models</h3>
-        <div className="space-y-2">
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-background">
           <AnimatePresence>
             {models.map((model, index) => (
               <motion.div

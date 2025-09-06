@@ -209,7 +209,33 @@ export const listMessages = async (params: {
   if (params.limit) queryParams.append('limit', params.limit.toString());
   
   const url = `message-list?${queryParams}`;
-  return callFunction<MessageListResponse>(url, undefined, 10000, signal);
+  
+  // Use direct GET request since message-list expects GET, not POST
+  try {
+    const { data: auth } = await supabase.auth.getSession();
+    if (!auth.session) {
+      throw new Error('UNAUTHORIZED: Not signed in');
+    }
+
+    const response = await fetch(`https://dxxovxcdbdkyhokusnaz.supabase.co/functions/v1/${url}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${auth.session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Message list error:', response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw normalizeError(error);
+  }
 };
 
 export const archiveChat = async (

@@ -5,54 +5,23 @@ import { logOpsEvent } from "../_shared/hardening.ts";
 
 // Google Gemini supported models (current as of 2025)
 const GOOGLE_MODELS = [
-  // Gemini 2.5 series (newest with thinking capabilities)
+  // Gemini 2.5 series (newest)
   'gemini-2.5-pro',
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
-  'gemini-2.5-flash-image',
   
   // Gemini 2.0 series
   'gemini-2.0-flash',
   'gemini-2.0-flash-lite',
-  'gemini-2.0-flash-live',
   
   // Gemini 1.5 series (legacy but still supported)
   'gemini-1.5-pro',
   'gemini-1.5-flash',
-  'gemini-1.5-flash-002',
-  'gemini-1.5-pro-002',
   
   // Experimental models
   'gemini-exp-1121',
   'gemini-exp-1114'
 ];
-
-// Legacy model name mapping for backward compatibility
-const MODEL_MAPPING: Record<string, string> = {
-  // Current model names - use exact API names from Google docs
-  'gemini-2.5-pro': 'gemini-2.5-pro',
-  'gemini-2.5-flash': 'gemini-2.5-flash', 
-  'gemini-2.5-flash-lite': 'gemini-2.5-flash-lite',
-  'gemini-2.0-flash': 'gemini-2.0-flash',
-  'gemini-1.5-pro': 'gemini-1.5-pro',
-  'gemini-1.5-flash': 'gemini-1.5-flash',
-  
-  // Handle models/ prefixed versions
-  'models/gemini-2.5-pro': 'gemini-2.5-pro',
-  'models/gemini-2.5-flash': 'gemini-2.5-flash',
-  'models/gemini-2.0-flash': 'gemini-2.0-flash',
-  'models/gemini-1.5-pro': 'gemini-1.5-pro',
-  'models/gemini-1.5-flash': 'gemini-1.5-flash'
-};
-
-function mapModelName(requestedModel: string): string {
-  return MODEL_MAPPING[requestedModel] || requestedModel;
-}
-
-// Legacy model name mapping for backward compatibility
-function mapModelName(requestedModel: string): string {
-  return MODEL_MAPPING[requestedModel] || requestedModel;
-}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -82,10 +51,10 @@ serve(async (req) => {
     // Parse request
     const reqData = await req.json();
 
-    // Map legacy model names to current ones
-    if (reqData.model) {
-      reqData.model = mapModelName(reqData.model);
-      console.log(`[${corrId}] Mapped model to: ${reqData.model}`);
+    // Simple model name mapping - strip models/ prefix if present
+    if (reqData.model && reqData.model.startsWith('models/')) {
+      reqData.model = reqData.model.replace('models/', '');
+      console.log(`[${corrId}] Stripped models/ prefix, using: ${reqData.model}`);
     }
 
     // Process common validation
@@ -97,25 +66,14 @@ serve(async (req) => {
     try {
       console.log(`[${corrId}] Calling Google Gemini for model: ${context.request.model}`);
 
-      // Determine model capabilities
-      const isThinkingModel = context.request.model.includes('2.5');
-      const isImageModel = context.request.model.includes('image');
-      const isLiveModel = context.request.model.includes('live');
-
-      // Prepare chat arguments with Gemini-specific format  
-      // Don't add models/ prefix here - let the provider handle it
+      // Prepare chat arguments with Gemini format
+      const modelForAPI = `models/${context.request.model}`;
+      
       const chatArgs: any = {
-        model: context.request.model // Use raw model name
+        model: modelForAPI
       };
 
-      // Handle system message (system instructions in Gemini)
-      if (context.request.system) {
-        chatArgs.systemInstruction = {
-          parts: [{ text: context.request.system }]
-        };
-      }
-
-      // Handle message format - Gemini uses 'contents' with 'parts'
+      // Handle message format - convert to Gemini contents format
       if (typeof context.request.message === 'string') {
         chatArgs.contents = [{
           role: 'user',
@@ -125,83 +83,47 @@ serve(async (req) => {
         // Convert conversation history to Gemini format
         chatArgs.contents = context.request.messages.map((msg: any) => ({
           role: msg.role === 'assistant' ? 'model' : msg.role,
-          parts: typeof msg.content === 'string' 
-            ? [{ text: msg.content }]
-            : Array.isArray(msg.content)
-              ? msg.content.map((part: any) => {
-                  if (part.type === 'text') return { text: part.text };
-                  if (part.type === 'image_url') return { 
-                    inlineData: { 
-                      mimeType: part.image_url.mime_type || 'image/jpeg',
-                      data: part.image_url.url.split(',')[1] // Remove data:image/jpeg;base64, prefix
-                    }
-                  };
-                  return part;
-                })
-              : [{ text: String(msg.content) }]
+          parts: [{ text: msg.content || msg.text || '' }]
         }));
-      } else if (Array.isArray(context.request.message)) {
-        // Handle multi-modal content (text + images)
-        const parts = context.request.message.map((part: any) => {
-          if (part.type === 'text') return { text: part.text };
-          if (part.type === 'image_url') return { 
-            inlineData: { 
-              mimeType: part.image_url.mime_type || 'image/jpeg',
-              data: part.image_url.url.split(',')[1]
-            }
-          };
-          return part;
-        });
-        
-        chatArgs.contents = [{
-          role: 'user',
-          parts: parts
-        }];
       } else {
         chatArgs.contents = [{
           role: 'user',
-          parts: [{ text: String(context.request.message) }]
+          parts: [{ text: String(context.request.message || '') }]
         }];
       }
 
-      // Pass parameters to provider for proper handling
-      if (context.request.temperature !== undefined) {
-        chatArgs.temperature = context.request.temperature;
+      // Generation configuration
+      chatArgs.generationConfig = {
+        temperature: context.request.temperature || 0.7,
+        maxOutputTokens: context.request.max_tokens || 1000
+      };
+
+      // Add system instruction if provided
+      if (context.request.system) {
+        chatArgs.systemInstruction = {
+          parts: [{ text: context.request.system }]
+        };
       }
 
-      if (context.request.max_tokens) {
-        chatArgs.max_tokens = context.request.max_tokens;
-      }
-
-      // Gemini-specific parameters
-      if (context.request.top_p !== undefined) {
-        chatArgs.top_p = context.request.top_p;
-      }
-
-      if (context.request.top_k !== undefined) {
-        chatArgs.top_k = context.request.top_k;
-      }
-
-      if (context.request.stop_sequences) {
-        chatArgs.stop_sequences = context.request.stop_sequences;
-      }
-
-      if (context.request.safety_settings) {
-        chatArgs.safetySettings = context.request.safety_settings;
-      }
-
-      if (context.request.tools) {
-        chatArgs.tools = context.request.tools.map((tool: any) => ({
-          functionDeclarations: Array.isArray(tool.functions) ? tool.functions : [tool.function]
-        }));
-      }
-
-      // Thinking capabilities for 2.5 models
-      if (isThinkingModel && context.request.show_thinking) {
-        chatArgs.show_thinking = true;
-      }
-
-      console.log(`[${corrId}] Using ${isThinkingModel ? 'thinking' : isImageModel ? 'image' : isLiveModel ? 'live' : 'standard'} model capabilities`);
+      // Add safety settings (optional - use defaults)
+      chatArgs.safetySettings = [
+        {
+          category: "HARM_CATEGORY_HARASSMENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_HATE_SPEECH", 
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE"
+        }
+      ];
 
       console.log(`[${corrId}] Gemini chat args:`, JSON.stringify(chatArgs, null, 2));
 
@@ -214,13 +136,10 @@ serve(async (req) => {
       await logOpsEvent(supabaseClient, userId, corrId, 'info', 'PROVIDER_SUCCESS', 'Google Gemini call completed successfully', {
         provider: 'google',
         model: context.request.model,
-        modelType: isThinkingModel ? 'thinking' : isImageModel ? 'image' : isLiveModel ? 'live' : 'standard',
         latencyMs: callLatency,
         tokensIn: providerResult.tokensIn,
         tokensOut: providerResult.tokensOut,
-        finishReason: providerResult.finishReason,
-        toolsUsed: providerResult.toolsUsed || false,
-        multiModal: providerResult.multiModal || false
+        finishReason: providerResult.finishReason
       });
 
       return createSuccessResponse(context, providerResult, 'google');
@@ -276,10 +195,6 @@ serve(async (req) => {
           errorCode = 'CONTENT_BLOCKED';
           status = 400;
           errorMessage = 'Content blocked by safety filters';
-        } else if (errorMsg.includes('overloaded') || errorMsg.includes('503')) {
-          errorCode = 'OVERLOADED';
-          status = 503;
-          errorMessage = 'Service temporarily overloaded';
         } else {
           errorMessage = providerError.message || 'Google Gemini call failed';
         }

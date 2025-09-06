@@ -255,13 +255,11 @@ export async function callGemini(args: any): Promise<ChatOut> {
   const key = Deno.env.get('GOOGLE_API_KEY');
   if (!key) throw new ProviderError('NO_API_KEY', 'Google Gemini key missing', 401);
 
-  // Clean model name - remove models/ prefix if present for URL construction
-  let modelName = args.model;
-  if (modelName.startsWith('models/')) {
-    modelName = modelName.substring(7); // Remove 'models/' prefix
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${key}`;
+  // Use the exact model name as provided - don't modify it
+  // The URL format is: /v1beta/models/{model}:generateContent
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(args.model)}:generateContent?key=${key}`;
+  
+  console.log('🚀 Gemini API URL:', url);
   
   // Build request body - support Gemini's native format
   const body: any = {};

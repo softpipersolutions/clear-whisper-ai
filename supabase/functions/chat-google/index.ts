@@ -29,13 +29,20 @@ const GOOGLE_MODELS = [
 
 // Legacy model name mapping for backward compatibility
 const MODEL_MAPPING: Record<string, string> = {
-  'models/gemini-2.5-flash': 'gemini-2.5-flash',
+  // Current model names - use exact API names from Google docs
+  'gemini-2.5-pro': 'gemini-2.5-pro',
+  'gemini-2.5-flash': 'gemini-2.5-flash', 
+  'gemini-2.5-flash-lite': 'gemini-2.5-flash-lite',
+  'gemini-2.0-flash': 'gemini-2.0-flash',
+  'gemini-1.5-pro': 'gemini-1.5-pro',
+  'gemini-1.5-flash': 'gemini-1.5-flash',
+  
+  // Handle models/ prefixed versions
   'models/gemini-2.5-pro': 'gemini-2.5-pro',
+  'models/gemini-2.5-flash': 'gemini-2.5-flash',
   'models/gemini-2.0-flash': 'gemini-2.0-flash',
   'models/gemini-1.5-pro': 'gemini-1.5-pro',
-  'models/gemini-1.5-flash': 'gemini-1.5-flash',
-  'gemini-pro': 'gemini-1.5-pro',
-  'gemini-flash': 'gemini-1.5-flash'
+  'models/gemini-1.5-flash': 'gemini-1.5-flash'
 };
 
 function mapModelName(requestedModel: string): string {

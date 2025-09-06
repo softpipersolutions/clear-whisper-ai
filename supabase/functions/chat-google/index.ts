@@ -99,8 +99,7 @@ serve(async (req) => {
       const modelForAPI = formatModelForAPI(context.request.model);
       
       const chatArgs: any = {
-        model: modelForAPI,
-        contents: []
+        model: modelForAPI
       };
 
       // Handle system message (system instructions in Gemini)
@@ -112,10 +111,10 @@ serve(async (req) => {
 
       // Handle message format - Gemini uses 'contents' with 'parts'
       if (typeof context.request.message === 'string') {
-        chatArgs.contents.push({
+        chatArgs.contents = [{
           role: 'user',
           parts: [{ text: context.request.message }]
-        });
+        }];
       } else if (Array.isArray(context.request.messages)) {
         // Convert conversation history to Gemini format
         chatArgs.contents = context.request.messages.map((msg: any) => ({
@@ -148,51 +147,43 @@ serve(async (req) => {
           return part;
         });
         
-        chatArgs.contents.push({
+        chatArgs.contents = [{
           role: 'user',
           parts: parts
-        });
+        }];
       } else {
-        chatArgs.contents.push({
+        chatArgs.contents = [{
           role: 'user',
           parts: [{ text: String(context.request.message) }]
-        });
+        }];
       }
 
-      // Generation configuration
-      const generationConfig: any = {};
-
+      // Pass parameters to provider for proper handling
       if (context.request.temperature !== undefined) {
-        generationConfig.temperature = context.request.temperature;
+        chatArgs.temperature = context.request.temperature;
       }
 
       if (context.request.max_tokens) {
-        generationConfig.maxOutputTokens = context.request.max_tokens;
+        chatArgs.max_tokens = context.request.max_tokens;
       }
 
+      // Gemini-specific parameters
       if (context.request.top_p !== undefined) {
-        generationConfig.topP = context.request.top_p;
+        chatArgs.top_p = context.request.top_p;
       }
 
       if (context.request.top_k !== undefined) {
-        generationConfig.topK = context.request.top_k;
+        chatArgs.top_k = context.request.top_k;
       }
 
       if (context.request.stop_sequences) {
-        generationConfig.stopSequences = context.request.stop_sequences;
+        chatArgs.stop_sequences = context.request.stop_sequences;
       }
 
-      // Add generation config if any parameters are set
-      if (Object.keys(generationConfig).length > 0) {
-        chatArgs.generationConfig = generationConfig;
-      }
-
-      // Safety settings (optional)
       if (context.request.safety_settings) {
         chatArgs.safetySettings = context.request.safety_settings;
       }
 
-      // Tool support (function calling)
       if (context.request.tools) {
         chatArgs.tools = context.request.tools.map((tool: any) => ({
           functionDeclarations: Array.isArray(tool.functions) ? tool.functions : [tool.function]
@@ -201,17 +192,10 @@ serve(async (req) => {
 
       // Thinking capabilities for 2.5 models
       if (isThinkingModel && context.request.show_thinking) {
-        chatArgs.generationConfig = {
-          ...chatArgs.generationConfig,
-          responseSchema: {
-            type: 'object',
-            properties: {
-              thinking: { type: 'string' },
-              response: { type: 'string' }
-            }
-          }
-        };
+        chatArgs.show_thinking = true;
       }
+
+      console.log(`[${corrId}] Using ${isThinkingModel ? 'thinking' : isImageModel ? 'image' : isLiveModel ? 'live' : 'standard'} model capabilities`);
 
       console.log(`[${corrId}] Gemini chat args:`, JSON.stringify(chatArgs, null, 2));
 

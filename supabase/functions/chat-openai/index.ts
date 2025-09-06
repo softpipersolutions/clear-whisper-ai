@@ -122,82 +122,43 @@ serve(async (req) => {
         });
       }
 
-      // Apply model-specific parameters
-      if (isGPT5Series) {
-        // GPT-5 models support both max_tokens and max_completion_tokens
-        if (context.request.max_tokens) {
-          chatArgs.max_completion_tokens = context.request.max_tokens;
-        }
-        
-        // GPT-5 supports temperature
-        if (context.request.temperature !== undefined) {
-          chatArgs.temperature = context.request.temperature;
-        }
-        
-        // GPT-5 specific parameters
-        if (context.request.reasoning_effort) {
-          chatArgs.reasoning_effort = context.request.reasoning_effort;
-        }
-        
-        if (context.request.verbosity) {
-          chatArgs.verbosity = context.request.verbosity;
-        }
-        
-        console.log(`[${corrId}] Using GPT-5 series parameters`);
-      } 
-      else if (isGPT41Series) {
-        // GPT-4.1 models
-        if (context.request.max_tokens) {
-          chatArgs.max_tokens = context.request.max_tokens;
-        }
-        
-        if (context.request.temperature !== undefined) {
-          chatArgs.temperature = context.request.temperature;
-        }
-        
-        console.log(`[${corrId}] Using GPT-4.1 series parameters`);
+      // Pass all parameters to the provider for proper handling
+      if (context.request.max_tokens) {
+        chatArgs.max_tokens = context.request.max_tokens;
       }
-      else if (isReasoningModel) {
-        // o1 models have specific constraints
-        if (context.request.max_tokens) {
-          chatArgs.max_completion_tokens = context.request.max_tokens;
-        }
-        
-        // o1 models don't support temperature, top_p, or system messages
-        console.log(`[${corrId}] Using o1 reasoning model parameters (no temperature/system)`);
-      } 
-      else {
-        // Legacy models (GPT-4o, GPT-4, etc.)
-        if (context.request.max_tokens) {
-          chatArgs.max_tokens = context.request.max_tokens;
-        }
-        
-        if (context.request.temperature !== undefined) {
-          chatArgs.temperature = context.request.temperature;
-        }
-        
-        console.log(`[${corrId}] Using legacy model parameters`);
+      
+      if (context.request.temperature !== undefined) {
+        chatArgs.temperature = context.request.temperature;
       }
 
-      // Add common optional parameters (where supported)
-      if (context.request.top_p !== undefined && !isReasoningModel) {
+      // Model-specific parameters
+      if (context.request.reasoning_effort) {
+        chatArgs.reasoning_effort = context.request.reasoning_effort;
+      }
+      
+      if (context.request.verbosity) {
+        chatArgs.verbosity = context.request.verbosity;
+      }
+
+      // Common optional parameters
+      if (context.request.top_p !== undefined) {
         chatArgs.top_p = context.request.top_p;
       }
 
-      if (context.request.frequency_penalty !== undefined && !isReasoningModel) {
+      if (context.request.frequency_penalty !== undefined) {
         chatArgs.frequency_penalty = context.request.frequency_penalty;
       }
 
-      if (context.request.presence_penalty !== undefined && !isReasoningModel) {
+      if (context.request.presence_penalty !== undefined) {
         chatArgs.presence_penalty = context.request.presence_penalty;
       }
 
-      if (context.request.stop && !isReasoningModel) {
+      if (context.request.stop) {
         chatArgs.stop = context.request.stop;
       }
 
-      // Add tool support if provided (not supported by o1 models)
-      if (context.request.tools && !isReasoningModel) {
+      // Tool support
+      if (context.request.tools) {
         chatArgs.tools = context.request.tools;
         
         if (context.request.tool_choice) {
@@ -209,6 +170,8 @@ serve(async (req) => {
       if (context.request.stream) {
         chatArgs.stream = context.request.stream;
       }
+
+      console.log(`[${corrId}] Using ${isGPT5Series ? 'GPT-5' : isGPT41Series ? 'GPT-4.1' : isReasoningModel ? 'reasoning' : 'legacy'} model parameters`);
 
       console.log(`[${corrId}] Chat args:`, JSON.stringify(chatArgs, null, 2));
 

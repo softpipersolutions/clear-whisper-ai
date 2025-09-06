@@ -60,14 +60,15 @@ async function fetchWithTimeoutRetry(
   throw new Error('UNREACHABLE_FETCH');
 }
 
-function mapHttpToCode(provider: 'openai' | 'anthropic' | 'google', status: number): ProviderError {
-  if (status === 400) return new ProviderError('BAD_INPUT', `${provider}: bad input`, 400);
-  if (status === 401 || status === 403) return new ProviderError('UNAUTHORIZED', `${provider}: unauthorized`, 401);
-  if (status === 404) return new ProviderError('NOT_FOUND', `${provider}: not found`, 404);
-  if (status === 409) return new ProviderError('CONFLICT', `${provider}: conflict`, 409);
-  if (status === 429) return new ProviderError('RATE_LIMITED', `${provider}: rate limited`, 429);
-  if (status >= 500) return new ProviderError('SERVICE_UNAVAILABLE', `${provider}: upstream error`, 503);
-  return new ProviderError('INTERNAL', `${provider}: unexpected ${status}`, status);
+function mapHttpToCode(provider: 'openai' | 'anthropic' | 'google', status: number, message?: string): ProviderError {
+  const errorMessage = message || `${provider}: HTTP ${status}`;
+  if (status === 400) return new ProviderError('BAD_INPUT', errorMessage, 400);
+  if (status === 401 || status === 403) return new ProviderError('UNAUTHORIZED', errorMessage, 401);
+  if (status === 404) return new ProviderError('NOT_FOUND', errorMessage, 404);
+  if (status === 409) return new ProviderError('CONFLICT', errorMessage, 409);
+  if (status === 429) return new ProviderError('RATE_LIMITED', errorMessage, 429);
+  if (status >= 500) return new ProviderError('SERVICE_UNAVAILABLE', errorMessage, 503);
+  return new ProviderError('INTERNAL', errorMessage, status);
 }
 
 // NOTE: Realtime models (e.g., gpt-realtime) require WS/WebRTC channels, not this HTTP path.
@@ -100,28 +101,65 @@ export async function callOpenAI(args: ChatArgs | any): Promise<ChatOut> {
 
   const started = nowMs();
   
-  // Support both old ChatArgs format and new flexible format
+  // Build request body from args - support all possible OpenAI parameters
   const body: any = {
     model: args.model,
     messages: args.messages,
-    stream: false,
+    stream: args.stream || false,
   };
 
-  // Add parameters based on what's provided - handle both old and new parameter formats
-  if (args.temperature !== undefined) {
+  // Handle model-specific parameter requirements
+  const isGPT5Series = args.model?.startsWith('gpt-5');
+  const isGPT41Series = args.model?.startsWith('gpt-4.1');
+  const isReasoningModel = args.model?.startsWith('o1') || args.model?.startsWith('o3') || args.model?.startsWith('o4');
+
+  // Temperature handling (not supported by reasoning models)
+  if (args.temperature !== undefined && !isReasoningModel) {
     body.temperature = args.temperature;
   }
+
+  // Token limit handling (different parameter names for different model families)
   if (args.max_tokens !== undefined) {
-    body.max_tokens = args.max_tokens;
+    if (isGPT5Series || isReasoningModel) {
+      body.max_completion_tokens = args.max_tokens;
+    } else {
+      body.max_tokens = args.max_tokens;
+    }
   }
+
+  // Direct max_completion_tokens support
   if (args.max_completion_tokens !== undefined) {
     body.max_completion_tokens = args.max_completion_tokens;
   }
-  
-  // Set defaults for older models if no parameters provided
-  if (!body.temperature && !body.max_tokens && !body.max_completion_tokens) {
-    body.temperature = 0.3;
-    body.max_tokens = 512;
+
+  // Other parameters (not supported by reasoning models)
+  if (!isReasoningModel) {
+    if (args.top_p !== undefined) body.top_p = args.top_p;
+    if (args.frequency_penalty !== undefined) body.frequency_penalty = args.frequency_penalty;
+    if (args.presence_penalty !== undefined) body.presence_penalty = args.presence_penalty;
+    if (args.stop) body.stop = args.stop;
+    if (args.tools) {
+      body.tools = args.tools;
+      if (args.tool_choice) body.tool_choice = args.tool_choice;
+    }
+  }
+
+  // GPT-5 specific parameters
+  if (isGPT5Series) {
+    if (args.reasoning_effort) body.reasoning_effort = args.reasoning_effort;
+    if (args.verbosity) body.verbosity = args.verbosity;
+  }
+
+  // Set reasonable defaults if nothing specified
+  if (body.temperature === undefined && body.max_tokens === undefined && body.max_completion_tokens === undefined) {
+    if (!isReasoningModel) {
+      body.temperature = 0.3;
+    }
+    if (isGPT5Series || isReasoningModel) {
+      body.max_completion_tokens = 512;
+    } else {
+      body.max_tokens = 512;
+    }
   }
 
   console.log('🚀 OpenAI API request body:', JSON.stringify(body, null, 2));
@@ -164,7 +202,7 @@ export async function callOpenAI(args: ChatArgs | any): Promise<ChatOut> {
     tokensOut: usage.completion_tokens ?? 0,
     finishReason: choice?.finish_reason ?? 'stop',
   };
-  // you can log latency (nowMs() - started) in caller
+  
   return out;
 }
 
@@ -209,33 +247,88 @@ export async function callAnthropic(args: ChatArgs): Promise<ChatOut> {
 
 // ---------- Google Gemini ----------
 
-export async function callGemini(args: ChatArgs): Promise<ChatOut> {
+export async function callGemini(args: any): Promise<ChatOut> {
   const key = Deno.env.get('GOOGLE_API_KEY');
   if (!key) throw new ProviderError('NO_API_KEY', 'Google Gemini key missing', 401);
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(args.model)}:generateContent?key=${key}`;
-  const contents = args.messages.map((m) => ({
-    role: m.role,
-    parts: [{ text: m.content }],
-  }));
+  
+  // Build request body - support Gemini's native format
+  const body: any = {};
+
+  // Handle contents (Gemini's message format)
+  if (args.contents) {
+    body.contents = args.contents;
+  } else if (args.messages) {
+    // Convert ChatArgs messages to Gemini contents format
+    body.contents = args.messages.map((m: any) => ({
+      role: m.role === 'assistant' ? 'model' : m.role,
+      parts: [{ text: m.content }],
+    }));
+  }
+
+  // System instructions
+  if (args.systemInstruction) {
+    body.systemInstruction = args.systemInstruction;
+  }
+
+  // Generation configuration
+  if (args.generationConfig || args.temperature !== undefined || args.max_tokens !== undefined) {
+    body.generationConfig = args.generationConfig || {};
+    
+    if (args.temperature !== undefined && !body.generationConfig.temperature) {
+      body.generationConfig.temperature = args.temperature;
+    }
+    
+    if (args.max_tokens !== undefined && !body.generationConfig.maxOutputTokens) {
+      body.generationConfig.maxOutputTokens = args.max_tokens;
+    }
+
+    // Apply defaults if nothing specified
+    if (!body.generationConfig.temperature && !body.generationConfig.maxOutputTokens) {
+      body.generationConfig.temperature = 0.3;
+      body.generationConfig.maxOutputTokens = 512;
+    }
+  }
+
+  // Safety settings
+  if (args.safetySettings) {
+    body.safetySettings = args.safetySettings;
+  }
+
+  // Tools (function calling)
+  if (args.tools) {
+    body.tools = args.tools;
+  }
+
+  console.log('🚀 Gemini API request body:', JSON.stringify(body, null, 2));
 
   const res = await fetchWithTimeoutRetry(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents,
-      generationConfig: {
-        temperature: args.temperature ?? 0.3,
-        maxOutputTokens: args.max_tokens ?? 512,
-      },
-    }),
+    body: JSON.stringify(body),
     timeoutMs: 15000,
     retries: 1,
   });
 
-  if (!res.ok) throw mapHttpToCode('google', res.status);
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('❌ Gemini API error:', res.status, errorText);
+    
+    let errorMessage = `HTTP ${res.status}`;
+    try {
+      const error = JSON.parse(errorText);
+      errorMessage = error.error?.message || errorMessage;
+    } catch {
+      errorMessage = errorText || errorMessage;
+    }
+    
+    throw mapHttpToCode('google', res.status, errorMessage);
+  }
 
   const json = await res.json();
+  console.log('✅ Gemini API success, usage:', json.usageMetadata);
+  
   const parts = json?.candidates?.[0]?.content?.parts ?? [];
   const text = parts.map((p: any) => p?.text ?? '').join('');
 

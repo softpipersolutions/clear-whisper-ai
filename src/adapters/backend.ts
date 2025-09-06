@@ -30,7 +30,11 @@ export interface AnalyzeResponse {
 export interface ChatConfirmResponse {
   ok: boolean;
   newBalanceINR?: number;
+  assistantText?: string;
+  tokensIn?: number;
+  tokensOut?: number;
   error?: string;
+  message?: string;
 }
 
 export interface WalletResponse {

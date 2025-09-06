@@ -8,7 +8,8 @@ import {
   checkIdempotency,
   hashIdempotencyKey 
 } from "../_shared/hardening.ts";
-import { isSupportedModel } from "../_shared/catalog.ts";
+import { isSupportedModel, getModelById } from "../_shared/catalog.ts";
+import { callOpenAI, callAnthropic, callGemini, type ChatArgs, type ChatOut } from "../_shared/providers.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,6 +25,9 @@ interface ChatConfirmRequest {
 interface ChatConfirmResponse {
   ok: boolean;
   newBalanceINR?: number;
+  assistantText?: string;
+  tokensIn?: number;
+  tokensOut?: number;
   error?: string;
   corrId: string;
 }
@@ -215,17 +219,178 @@ serve(async (req) => {
 
     console.log(`[${corrId}] Wallet updated successfully. New balance: ₹${newBalance}`);
 
-    // Log successful transaction
-    await logOpsEvent(supabaseClient, userId, corrId, 'info', 'CHAT_CONFIRM_SUCCESS', 'Successfully processed chat confirmation', 
-      { model, amountINR: deductedCostINR, newBalance });
+    // Now call the AI provider
+    let providerResult: ChatOut;
+    let providerName: string;
+    let callStartTime = Date.now();
+    
+    try {
+      console.log(`[${corrId}] Calling AI provider for model: ${model}`);
+      
+      // Get model info to determine provider
+      const modelInfo = getModelById(model);
+      if (!modelInfo) {
+        throw new Error('BAD_INPUT: Invalid model ID');
+      }
+      
+      providerName = modelInfo.provider;
+      
+      // Prepare chat arguments
+      const chatArgs: ChatArgs = {
+        model: modelInfo.model, // Use the exact provider model string
+        messages: [
+          { role: 'user', content: message }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      };
+      
+      // Call the appropriate provider
+      switch (modelInfo.provider) {
+        case 'openai':
+          providerResult = await callOpenAI(chatArgs);
+          break;
+        case 'anthropic':
+          providerResult = await callAnthropic(chatArgs);
+          break;
+        case 'google':
+          providerResult = await callGemini(chatArgs);
+          break;
+        default:
+          throw new Error(`NO_API_KEY: Unsupported provider: ${modelInfo.provider}`);
+      }
+      
+      const callLatency = Date.now() - callStartTime;
+      console.log(`[${corrId}] Provider call successful. Latency: ${callLatency}ms, Tokens: ${providerResult.tokensIn}→${providerResult.tokensOut}`);
+      
+      // Log successful provider call
+      await logOpsEvent(supabaseClient, userId, corrId, 'info', 'PROVIDER_SUCCESS', 'AI provider call completed successfully', {
+        provider: providerName,
+        model: modelInfo.model,
+        latencyMs: callLatency,
+        tokensIn: providerResult.tokensIn,
+        tokensOut: providerResult.tokensOut,
+        finishReason: providerResult.finishReason
+      });
+      
+    } catch (providerError) {
+      const callLatency = Date.now() - callStartTime;
+      console.error(`[${corrId}] Provider call failed:`, providerError);
+      
+      // Log provider failure
+      await logOpsEvent(supabaseClient, userId, corrId, 'error', 'PROVIDER_FAILED', 'AI provider call failed', {
+        provider: providerName || 'unknown',
+        model: model,
+        latencyMs: callLatency,
+        error: providerError.message
+      });
+      
+      // Rollback the wallet deduction by issuing a refund transaction
+      console.log(`[${corrId}] Rolling back wallet deduction due to provider failure`);
+      
+      try {
+        // Add refund transaction
+        const { error: refundError } = await supabaseClient
+          .from('transactions')
+          .insert({
+            user_id: userId,
+            type: 'recharge',
+            amount_inr: deductedCostINR,
+            amount_display: deductedCostINR,
+            currency: 'INR',
+            raw_cost_inr: rawCostINR,
+            deducted_cost_inr: deductedCostINR
+          });
+          
+        if (refundError) {
+          console.error(`[${corrId}] Refund transaction failed:`, refundError);
+          // Continue anyway - manual intervention may be needed
+        }
+        
+        // Update wallet balance back to original
+        const { error: rollbackError } = await supabaseClient
+          .from('wallets')
+          .update({
+            balance_inr: currentBalance,
+            balance_display: currentBalance
+          })
+          .eq('user_id', userId);
+          
+        if (rollbackError) {
+          console.error(`[${corrId}] Wallet rollback failed:`, rollbackError);
+          await logOpsEvent(supabaseClient, userId, corrId, 'error', 'ROLLBACK_FAILED', 'Failed to rollback wallet after provider failure', { 
+            error: rollbackError,
+            originalBalance: currentBalance,
+            deductedAmount: deductedCostINR
+          });
+        } else {
+          console.log(`[${corrId}] Wallet rollback successful`);
+          await logOpsEvent(supabaseClient, userId, corrId, 'info', 'ROLLBACK_SUCCESS', 'Wallet rollback completed', {
+            originalBalance: currentBalance,
+            deductedAmount: deductedCostINR
+          });
+        }
+        
+      } catch (rollbackError) {
+        console.error(`[${corrId}] Rollback process failed:`, rollbackError);
+        await logOpsEvent(supabaseClient, userId, corrId, 'error', 'ROLLBACK_ERROR', 'Rollback process encountered error', {
+          error: rollbackError,
+          originalBalance: currentBalance,
+          deductedAmount: deductedCostINR
+        });
+      }
+      
+      // Determine error code from provider error
+      const errorMessage = providerError.message || 'Provider call failed';
+      let errorCode = 'SERVICE_UNAVAILABLE';
+      let status = 503;
+      
+      if (errorMessage.includes('NO_API_KEY:')) {
+        errorCode = 'NO_API_KEY';
+        status = 503;
+      } else if (errorMessage.includes('UNAUTHORIZED:')) {
+        errorCode = 'UNAUTHORIZED';
+        status = 401;
+      } else if (errorMessage.includes('BAD_INPUT:')) {
+        errorCode = 'BAD_INPUT';
+        status = 400;
+      } else if (errorMessage.includes('RATE_LIMITED:')) {
+        errorCode = 'RATE_LIMITED';
+        status = 429;
+      }
+      
+      return new Response(JSON.stringify({
+        ok: false,
+        error: errorCode,
+        message: errorMessage.replace(/^[A-Z_]+:\s*/, ''),
+        corrId
+      }), {
+        status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Log successful transaction with provider details
+    await logOpsEvent(supabaseClient, userId, corrId, 'info', 'CHAT_CONFIRM_SUCCESS', 'Successfully processed chat confirmation with AI response', 
+      { 
+        model, 
+        provider: providerName, 
+        amountINR: deductedCostINR, 
+        newBalance,
+        tokensIn: providerResult.tokensIn,
+        tokensOut: providerResult.tokensOut
+      });
 
     const response: ChatConfirmResponse = {
       ok: true,
       newBalanceINR: Math.round(newBalance * 100) / 100,
+      assistantText: providerResult.text,
+      tokensIn: providerResult.tokensIn,
+      tokensOut: providerResult.tokensOut,
       corrId
     };
 
-    console.log(`[${corrId}] Chat confirm completed successfully`);
+    console.log(`[${corrId}] Chat confirm completed successfully with AI response`);
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -247,6 +412,15 @@ serve(async (req) => {
     } else if (errorMessage.includes('INSUFFICIENT_FUNDS:')) {
       errorCode = 'INSUFFICIENT_FUNDS';
       status = 402;
+    } else if (errorMessage.includes('NO_API_KEY:')) {
+      errorCode = 'NO_API_KEY';
+      status = 503;
+    } else if (errorMessage.includes('RATE_LIMITED:')) {
+      errorCode = 'RATE_LIMITED';
+      status = 429;
+    } else if (errorMessage.includes('SERVICE_UNAVAILABLE:')) {
+      errorCode = 'SERVICE_UNAVAILABLE';
+      status = 503;
     } else if (errorMessage.includes('INTERNAL:')) {
       errorCode = 'INTERNAL';
       status = 500;
@@ -264,6 +438,7 @@ serve(async (req) => {
     }
     
     return new Response(JSON.stringify({ 
+      ok: false,
       error: errorCode,
       message: errorMessage.replace(/^[A-Z_]+:\s*/, ''), // Remove error code prefix
       corrId

@@ -16,7 +16,7 @@ const RightModels = () => {
   const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation } = useChatStore();
   const { user } = useAuthStore();
   const { convertFromINR, fetchFxRate, isStale, rates, error: fxError } = useFxStore();
-  const { models: allModels, pricing, fx, loading: modelsLoading, fetchModels } = useModelsStore();
+  const { models: allModels, pricing, fx, loading: modelsLoading, fetchModels, forceRefresh } = useModelsStore();
   
   // Get user's preferred currency
   const userCurrency = user?.user_metadata?.preferred_currency || 'INR';
@@ -25,6 +25,14 @@ const RightModels = () => {
   useEffect(() => {
     fetchModels();
   }, [fetchModels]);
+  
+  // Listen for NO_API_KEY errors to refresh models
+  useEffect(() => {
+    if (error === 'Provider key not configured') {
+      // Force refresh models to update locked states
+      forceRefresh();
+    }
+  }, [error, forceRefresh]);
   
   // Fetch FX rate when component mounts or currency changes
   useEffect(() => {
@@ -230,13 +238,13 @@ const RightModels = () => {
                       <h4 className="font-medium text-sm text-foreground">{model.label}</h4>
                       <div className="flex items-center gap-1">
                         {model.locked && (
-                          <Badge variant="outline" className="text-xs border-amber-200 text-amber-700 bg-amber-50">
+                          <Badge variant="outline" className="text-xs border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950">
                             <Lock size={8} className="mr-1" />
                             Locked
                           </Badge>
                         )}
                         {model.pricingUSD.unit === 'audioTokens' && (
-                          <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">
+                          <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50 dark:border-blue-800 dark:text-blue-300 dark:bg-blue-950">
                             <Volume2 size={8} className="mr-1" />
                             Audio
                           </Badge>

@@ -13,6 +13,7 @@ interface ModelsState {
   fetchModels: () => Promise<void>;
   getModelById: (id: string) => ModelInfo | undefined;
   clearError: () => void;
+  forceRefresh: () => Promise<void>;
 }
 
 export const useModelsStore = create<ModelsState>((set, get) => ({
@@ -27,8 +28,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     const now = Date.now();
     const { lastFetch } = get();
     
-    // Cache for 5 minutes
-    if (now - lastFetch < 5 * 60 * 1000) {
+    // Cache for 2 minutes (shorter cache for provider key changes)
+    if (now - lastFetch < 2 * 60 * 1000) {
       return;
     }
 
@@ -58,5 +59,11 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     return models.find(model => model.id === id);
   },
 
-  clearError: () => set({ error: null })
+  clearError: () => set({ error: null }),
+
+  // Force refresh models (useful when provider keys change)
+  forceRefresh: async () => {
+    set({ lastFetch: 0 });
+    return get().fetchModels();
+  }
 }));

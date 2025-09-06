@@ -62,6 +62,24 @@ export type Database = {
         }
         Relationships: []
       }
+      idempotency_keys: {
+        Row: {
+          created_at: string | null
+          key: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          key: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          key?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           chat_id: string
@@ -106,6 +124,39 @@ export type Database = {
           },
         ]
       }
+      ops_logs: {
+        Row: {
+          code: string | null
+          corr_id: string | null
+          id: number
+          level: string | null
+          meta: Json | null
+          msg: string | null
+          ts: string | null
+          user_id: string | null
+        }
+        Insert: {
+          code?: string | null
+          corr_id?: string | null
+          id?: number
+          level?: string | null
+          meta?: Json | null
+          msg?: string | null
+          ts?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          code?: string | null
+          corr_id?: string | null
+          id?: number
+          level?: string | null
+          meta?: Json | null
+          msg?: string | null
+          ts?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           country: string | null
@@ -133,6 +184,27 @@ export type Database = {
           name?: string | null
           preferred_currency?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          action: string
+          count: number
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          action: string
+          count?: number
+          user_id: string
+          window_start: string
+        }
+        Update: {
+          action?: string
+          count?: number
+          user_id?: string
+          window_start?: string
         }
         Relationships: []
       }
@@ -193,6 +265,27 @@ export type Database = {
           currency?: string
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          event_id: string
+          payload: Json
+          provider: string
+          received_at: string | null
+        }
+        Insert: {
+          event_id: string
+          payload: Json
+          provider: string
+          received_at?: string | null
+        }
+        Update: {
+          event_id?: string
+          payload?: Json
+          provider?: string
+          received_at?: string | null
         }
         Relationships: []
       }

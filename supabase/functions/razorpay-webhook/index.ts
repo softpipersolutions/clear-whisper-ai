@@ -1,55 +1,24 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { generateCorrId, logOpsEvent } from "../_shared/hardening.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-razorpay-signature',
 };
 
-// Create a table to track processed webhook events for idempotency
-async function createWebhookEventsTable(supabase: any) {
-  const { error } = await supabase.rpc('exec_sql', {
-    query: `
-      CREATE TABLE IF NOT EXISTS public.webhook_events (
-        id TEXT PRIMARY KEY,
-        event_type TEXT NOT NULL,
-        processed_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `
-  });
-  
-  if (error) {
-    console.warn('Could not create webhook_events table:', error);
-  }
-}
-
-// Validate Razorpay webhook signature
-function validateSignature(body: string, signature: string, secret: string): boolean {
-  try {
-    const crypto = globalThis.crypto;
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(secret);
-    const data = encoder.encode(body);
-    
-    // For now, we'll do basic validation
-    // In production, implement proper HMAC SHA256 validation
-    return signature && signature.length > 0;
-  } catch (error) {
-    console.error('Signature validation error:', error);
-    return false;
-  }
-}
-
 serve(async (req) => {
+  const corrId = generateCorrId();
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  console.log(`[${corrId}] Razorpay webhook received`);
+
   try {
-    console.log('Razorpay webhook called');
-    
     if (req.method !== 'POST') {
       throw new Error('Method not allowed');
     }
@@ -60,84 +29,82 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const body = await req.text();
-    const signature = req.headers.get('x-razorpay-signature') || '';
-    const razorpaySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
+    const event = await req.json();
+    const eventId = event.payload?.payment?.entity?.id || event.payload?.order?.entity?.id || `unknown_${Date.now()}`;
     
-    if (!razorpaySecret) {
-      throw new Error('Razorpay secret not configured');
-    }
+    console.log(`[${corrId}] Processing webhook event: ${event.event}, ID: ${eventId}`);
 
-    console.log('Validating webhook signature...');
-    
-    // Validate signature
-    if (!validateSignature(body, signature, razorpaySecret)) {
-      console.error('Invalid webhook signature');
-      return new Response(JSON.stringify({ error: 'Invalid signature' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Idempotency check - prevent duplicate webhook processing
+    const { error: insertError } = await supabaseClient
+      .from('webhook_events')
+      .insert({
+        provider: 'razorpay',
+        event_id: eventId,
+        payload: event
       });
+
+    if (insertError && insertError.code === '23505') { // Unique constraint violation
+      console.log(`[${corrId}] Duplicate webhook event ignored: ${eventId}`);
+      await logOpsEvent(supabaseClient, null, corrId, 'info', 'WEBHOOK_DUPLICATE', 'Duplicate webhook event ignored', { eventId });
+      return new Response('OK', { status: 200 });
     }
 
-    const webhookData = JSON.parse(body);
-    const { event, payload } = webhookData;
-    
-    console.log('Webhook event:', event);
-    console.log('Payload:', JSON.stringify(payload, null, 2));
+    if (insertError) {
+      console.error(`[${corrId}] Failed to log webhook event:`, insertError);
+      throw new Error('Failed to process webhook');
+    }
 
-    // Check for idempotency using event ID
-    const eventId = `${event}_${payload.payment?.entity?.id || payload.order?.entity?.id || Date.now()}`;
-    
-    // For now, we'll skip the idempotency check since we can't use exec_sql
-    // In production, implement proper event tracking
-    
     // Handle payment.captured event
-    if (event === 'payment.captured') {
-      const payment = payload.payment.entity;
-      const userId = payment.notes?.user_id;
-      const amountPaise = payment.amount;
-      const amountINR = amountPaise / 100;
+    if (event.event === 'payment.captured') {
+      const payment = event.payload.payment.entity;
+      const orderId = payment.order_id;
+      const amountPaid = payment.amount / 100; // Convert from paise to rupees
       
+      console.log(`[${corrId}] Payment captured: Order ${orderId}, Amount: ₹${amountPaid}`);
+
+      // Extract user_id from order notes (set during order creation)
+      const userId = payment.notes?.user_id;
       if (!userId) {
-        console.error('No user_id in payment notes');
-        throw new Error('User ID not found in payment');
+        console.error(`[${corrId}] No user_id found in payment notes`);
+        await logOpsEvent(supabaseClient, null, corrId, 'error', 'WEBHOOK_MISSING_USER', 'Payment missing user_id in notes', { orderId, paymentId: payment.id });
+        return new Response('Missing user data', { status: 400 });
       }
 
-      console.log(`Processing payment capture for user: ${userId}, amount: ₹${amountINR}`);
-
-      // Check if user wallet exists
+      console.log(`[${corrId}] Crediting wallet for user: ${userId}`);
+      
+      // Credit user's wallet
       const { data: walletData, error: walletError } = await supabaseClient
         .from('wallets')
-        .select('balance_inr, balance_display')
+        .select('balance_inr, balance_display, currency')
         .eq('user_id', userId)
         .single();
 
-      if (walletError && walletError.code !== 'PGRST116') { // PGRST116 = no rows
-        console.error('Wallet fetch error:', walletError);
-        throw new Error('Failed to fetch wallet data');
+      if (walletError) {
+        console.error(`[${corrId}] Wallet fetch error:`, walletError);
+        await logOpsEvent(supabaseClient, userId, corrId, 'error', 'WALLET_FETCH_ERROR', 'Failed to fetch wallet for credit', { error: walletError });
+        throw new Error('Failed to fetch wallet');
       }
 
-      let newBalance: number;
-      
       if (!walletData) {
-        // Create new wallet if it doesn't exist
-        newBalance = amountINR;
+        console.log(`[${corrId}] Creating wallet for user: ${userId}`);
         const { error: createError } = await supabaseClient
           .from('wallets')
           .insert({
             user_id: userId,
-            balance_inr: newBalance,
-            balance_display: newBalance,
+            balance_inr: amountPaid,
+            balance_display: amountPaid,
             currency: 'INR'
           });
-        
+
         if (createError) {
-          console.error('Wallet creation error:', createError);
+          console.error(`[${corrId}] Wallet creation error:`, createError);
+          await logOpsEvent(supabaseClient, userId, corrId, 'error', 'WALLET_CREATE_ERROR', 'Failed to create wallet during credit', { error: createError });
           throw new Error('Failed to create wallet');
         }
       } else {
         // Update existing wallet
-        newBalance = walletData.balance_inr + amountINR;
+        const newBalance = walletData.balance_inr + amountPaid;
+        
         const { error: updateError } = await supabaseClient
           .from('wallets')
           .update({
@@ -147,48 +114,60 @@ serve(async (req) => {
           .eq('user_id', userId);
 
         if (updateError) {
-          console.error('Wallet update error:', updateError);
-          throw new Error('Failed to update wallet balance');
+          console.error(`[${corrId}] Wallet update error:`, updateError);
+          await logOpsEvent(supabaseClient, userId, corrId, 'error', 'WALLET_UPDATE_ERROR', 'Failed to credit wallet', { error: updateError });
+          throw new Error('Failed to update wallet');
         }
+
+        console.log(`[${corrId}] Wallet credited successfully. New balance: ₹${newBalance}`);
       }
 
-      // Log recharge transaction
+      // Log credit transaction
       const { error: transactionError } = await supabaseClient
         .from('transactions')
         .insert({
           user_id: userId,
-          type: 'recharge',
-          amount_inr: amountINR,
-          amount_display: payment.notes?.display_amount ? parseFloat(payment.notes.display_amount) : amountINR,
-          currency: payment.notes?.display_currency || 'INR',
-          raw_cost_inr: null, // Not applicable for recharge
-          deducted_cost_inr: null // Not applicable for recharge
+          type: 'credit',
+          amount_inr: amountPaid,
+          amount_display: amountPaid,
+          currency: 'INR'
         });
 
       if (transactionError) {
-        console.error('Transaction log error:', transactionError);
-        // Don't fail the whole operation for logging errors
-        console.warn('Failed to log transaction, but wallet was updated successfully');
+        console.error(`[${corrId}] Transaction log error:`, transactionError);
+        // Don't fail the webhook for transaction logging errors
       }
 
-      console.log(`Recharge successful. New balance: ₹${newBalance}`);
+      await logOpsEvent(supabaseClient, userId, corrId, 'info', 'PAYMENT_CREDITED', 'Successfully credited payment to wallet', 
+        { orderId, paymentId: payment.id, amount: amountPaid });
+      
+      console.log(`[${corrId}] Payment processing completed successfully`);
     } else {
-      console.log(`Unhandled webhook event: ${event}`);
+      console.log(`[${corrId}] Unhandled webhook event: ${event.event}`);
+      await logOpsEvent(supabaseClient, null, corrId, 'info', 'WEBHOOK_UNHANDLED', 'Unhandled webhook event', { event: event.event });
     }
 
-    return new Response(JSON.stringify({ 
-      success: true,
-      message: 'Webhook processed successfully'
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response('OK', { status: 200 });
   } catch (error) {
-    console.error('Error in razorpay-webhook function:', error);
+    console.error(`[${corrId}] Webhook processing error:`, error);
+    
+    try {
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      await logOpsEvent(supabaseClient, null, corrId, 'error', 'WEBHOOK_ERROR', 'Webhook processing failed', { error: error.message });
+    } catch (logError) {
+      console.error(`[${corrId}] Failed to log webhook error:`, logError);
+    }
+    
     return new Response(JSON.stringify({ 
-      error: error.message || 'Internal server error' 
+      error: 'INTERNAL',
+      message: 'Webhook processing failed',
+      corrId 
     }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 });

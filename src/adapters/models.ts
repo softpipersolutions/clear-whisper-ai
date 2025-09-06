@@ -39,7 +39,14 @@ export interface ModelsResponse {
 export async function fetchModels(): Promise<ModelsResponse> {
   try {
     const data = await callFunction<ModelsResponse>('models');
-    return data;
+    
+    // Filter out Google/Gemini models temporarily
+    const filteredModels = data.models.filter(model => model.provider !== 'google');
+    
+    return {
+      ...data,
+      models: filteredModels
+    };
   } catch (error) {
     console.error('Error fetching models:', error);
     throw error;

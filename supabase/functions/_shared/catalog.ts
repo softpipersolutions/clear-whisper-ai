@@ -30,12 +30,12 @@ export const getProviderAvailability = () => {
 
 // Base model definitions (without lock status)
 const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
-  // OPENAI (API)
+  // OPENAI (API) - Using correct API model names
   {
     id: 'gpt-5',
     provider: 'openai',
     label: 'GPT-5',
-    model: 'gpt-5',
+    model: 'gpt-5-2025-08-07',
     family: 'gpt-5',
     tags: ['Flagship', 'Reasoning', 'Multimodal'],
     pricingUSD: {
@@ -49,7 +49,7 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
     id: 'gpt-5-mini',
     provider: 'openai',
     label: 'GPT-5 Mini',
-    model: 'gpt-5-mini',
+    model: 'gpt-5-mini-2025-08-07',
     family: 'gpt-5',
     tags: ['Fast', 'Budget', 'Efficient'],
     pricingUSD: {
@@ -63,7 +63,7 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
     id: 'gpt-5-nano',
     provider: 'openai',
     label: 'GPT-5 Nano',
-    model: 'gpt-5-nano',
+    model: 'gpt-5-nano-2025-08-07',
     family: 'gpt-5',
     tags: ['Ultra Fast', 'Ultra Budget', 'Minimal'],
     pricingUSD: {
@@ -74,42 +74,42 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
     }
   },
   {
-    id: 'gpt-realtime',
+    id: 'gpt-4o',
     provider: 'openai',
-    label: 'GPT Realtime',
-    model: 'gpt-realtime',
-    family: 'gpt-realtime',
-    tags: ['Realtime', 'Audio', 'Streaming'],
+    label: 'GPT-4o',
+    model: 'gpt-4o',
+    family: 'gpt-4',
+    tags: ['Multimodal', 'Vision', 'Legacy'],
     pricingUSD: {
-      inputPer1M: 32.00,
-      outputPer1M: 64.00,
-      cachedInputPer1M: 0.40,
-      unit: 'audioTokens'
-    }
-  },
-
-  // ANTHROPIC (Claude API)
-  {
-    id: 'claude-4.1-opus',
-    provider: 'anthropic',
-    label: 'Claude 4.1 Opus',
-    model: 'claude-4.1-opus',
-    family: 'claude-4',
-    tags: ['Premium', 'Reasoning', 'Complex'],
-    pricingUSD: {
-      inputPer1M: 15.00,
-      outputPer1M: 75.00,
-      cachedInputPer1M: 1.50,
+      inputPer1M: 2.50,
+      outputPer1M: 10.00,
+      cachedInputPer1M: 1.25,
       unit: 'tokens'
     }
   },
   {
-    id: 'claude-4-sonnet',
+    id: 'gpt-4o-mini',
+    provider: 'openai',
+    label: 'GPT-4o Mini',
+    model: 'gpt-4o-mini',
+    family: 'gpt-4',
+    tags: ['Fast', 'Budget', 'Vision'],
+    pricingUSD: {
+      inputPer1M: 0.15,
+      outputPer1M: 0.60,
+      cachedInputPer1M: 0.075,
+      unit: 'tokens'
+    }
+  },
+
+  // ANTHROPIC (Claude API) - Using correct API model names
+  {
+    id: 'claude-3.5-sonnet',
     provider: 'anthropic',
-    label: 'Claude 4 Sonnet',
-    model: 'claude-4-sonnet',
-    family: 'claude-4',
-    tags: ['Balanced', 'Coding', 'Analysis'],
+    label: 'Claude 3.5 Sonnet',
+    model: 'claude-3-5-sonnet-20241022',
+    family: 'claude-3',
+    tags: ['Reasoning', 'Coding', 'Analysis'],
     pricingUSD: {
       inputPer1M: 3.00,
       outputPer1M: 15.00,
@@ -121,7 +121,7 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
     id: 'claude-3.5-haiku',
     provider: 'anthropic',
     label: 'Claude 3.5 Haiku',
-    model: 'claude-3.5-haiku',
+    model: 'claude-3-5-haiku-20241022',
     family: 'claude-3',
     tags: ['Fast', 'Budget', 'Quick'],
     pricingUSD: {

@@ -208,22 +208,33 @@ export const postAnalyze = async (
 
 // Helper function to determine provider from model
 const getProviderFromModel = (modelId: string): 'openai' | 'anthropic' | 'google' => {
-  console.log(`Determining provider for model: ${modelId}`);
+  console.log(`🔍 Determining provider for model: ${modelId}`);
   
-  if (modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-') || modelId.startsWith('o4-')) {
-    console.log(`Model ${modelId} mapped to OpenAI`);
+  // OpenAI models - handle all variations including new models
+  if (modelId.startsWith('gpt-') || 
+      modelId.startsWith('o1-') || 
+      modelId.startsWith('o3-') || 
+      modelId.startsWith('o4-') ||
+      modelId.includes('text-davinci')) {
+    console.log(`✅ Model ${modelId} mapped to OpenAI`);
     return 'openai';
   }
+  
+  // Anthropic models - handle all Claude variations
   if (modelId.startsWith('claude')) {
-    console.log(`Model ${modelId} mapped to Anthropic`);
+    console.log(`✅ Model ${modelId} mapped to Anthropic`);
     return 'anthropic';
   }
-  if (modelId.startsWith('gemini')) {
-    console.log(`Model ${modelId} mapped to Google`);
+  
+  // Google models - handle both short and full model names
+  if (modelId.startsWith('gemini') || 
+      modelId.startsWith('models/gemini') ||
+      modelId.includes('gemini')) {
+    console.log(`✅ Model ${modelId} mapped to Google`);
     return 'google';
   }
   
-  console.error(`Unknown provider for model: ${modelId}`);
+  console.error(`❌ Unknown provider for model: ${modelId}`);
   throw new Error(`Unknown provider for model: ${modelId}`);
 };
 

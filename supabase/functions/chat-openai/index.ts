@@ -60,15 +60,36 @@ serve(async (req) => {
     try {
       console.log(`[${corrId}] Calling OpenAI for model: ${context.request.model}`);
       
-      // Prepare chat arguments
-      const chatArgs: ChatArgs = {
+      // Prepare chat arguments with model-specific parameters
+      const isGPT5Series = context.request.model.includes('gpt-5') || 
+                          context.request.model.includes('o3-') || 
+                          context.request.model.includes('o4-');
+      
+      const chatArgs: any = {
         model: context.request.model,
         messages: [
           { role: 'user', content: context.request.message }
-        ],
-        temperature: context.request.temperature ?? 0.7,
-        max_tokens: context.request.max_tokens ?? 1000
+        ]
       };
+      
+      // GPT-5 and newer models use different parameters
+      if (isGPT5Series) {
+        // GPT-5 models use max_completion_tokens and don't support temperature
+        if (context.request.max_tokens) {
+          chatArgs.max_completion_tokens = context.request.max_tokens;
+        }
+        // No temperature parameter for GPT-5 series
+        console.log(`[${corrId}] Using GPT-5 series parameters (no temperature, max_completion_tokens)`);
+      } else {
+        // Legacy models (GPT-4, GPT-4o) use old parameters
+        chatArgs.temperature = context.request.temperature ?? 0.7;
+        if (context.request.max_tokens) {
+          chatArgs.max_tokens = context.request.max_tokens;
+        }
+        console.log(`[${corrId}] Using legacy model parameters (temperature, max_tokens)`);
+      }
+      
+      console.log(`[${corrId}] Chat args:`, JSON.stringify(chatArgs, null, 2));
       
       const providerResult = await callOpenAI(chatArgs);
       const callLatency = Date.now() - callStartTime;

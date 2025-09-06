@@ -91,7 +91,7 @@ export function isProviderAvailable(p: 'openai' | 'anthropic' | 'google'): boole
 
 // ---------- OpenAI ----------
 
-export async function callOpenAI(args: ChatArgs): Promise<ChatOut> {
+export async function callOpenAI(args: ChatArgs | any): Promise<ChatOut> {
   const key = Deno.env.get('OPENAI_API_KEY');
   if (!key) throw new ProviderError('NO_API_KEY', 'OpenAI key missing', 401);
   if (isHttpUnsupportedModel(args.model)) {
@@ -99,13 +99,32 @@ export async function callOpenAI(args: ChatArgs): Promise<ChatOut> {
   }
 
   const started = nowMs();
-  const body = {
+  
+  // Support both old ChatArgs format and new flexible format
+  const body: any = {
     model: args.model,
     messages: args.messages,
-    temperature: args.temperature ?? 0.3,
-    max_tokens: args.max_tokens ?? 512,
     stream: false,
   };
+
+  // Add parameters based on what's provided - handle both old and new parameter formats
+  if (args.temperature !== undefined) {
+    body.temperature = args.temperature;
+  }
+  if (args.max_tokens !== undefined) {
+    body.max_tokens = args.max_tokens;
+  }
+  if (args.max_completion_tokens !== undefined) {
+    body.max_completion_tokens = args.max_completion_tokens;
+  }
+  
+  // Set defaults for older models if no parameters provided
+  if (!body.temperature && !body.max_tokens && !body.max_completion_tokens) {
+    body.temperature = 0.3;
+    body.max_tokens = 512;
+  }
+
+  console.log('🚀 OpenAI API request body:', JSON.stringify(body, null, 2));
 
   const res = await fetchWithTimeoutRetry('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -118,9 +137,24 @@ export async function callOpenAI(args: ChatArgs): Promise<ChatOut> {
     retries: 1,
   });
 
-  if (!res.ok) throw mapHttpToCode('openai', res.status);
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('❌ OpenAI API error:', res.status, errorText);
+    
+    let errorMessage = `HTTP ${res.status}`;
+    try {
+      const error = JSON.parse(errorText);
+      errorMessage = error.error?.message || errorMessage;
+    } catch {
+      errorMessage = errorText || errorMessage;
+    }
+    
+    throw mapHttpToCode('openai', res.status, errorMessage);
+  }
 
   const json = await res.json();
+  console.log('✅ OpenAI API success, tokens used:', json.usage);
+  
   const choice = json?.choices?.[0];
   const text = choice?.message?.content ?? '';
   const usage = json?.usage || {};

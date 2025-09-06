@@ -246,8 +246,11 @@ serve(async (req) => {
       
       // Determine provider from model name
       const provider = resolveProvider(model);
+      console.log(`[${corrId}] Resolved provider "${provider}" for model "${model}"`);
+      
       if (provider === 'unknown') {
-        throw new ProviderError('BAD_INPUT', 'Unknown model provider', 400);
+        console.error(`[${corrId}] Unknown provider for model: ${model}`);
+        throw new ProviderError('BAD_INPUT', `Unknown model provider for "${model}"`, 400);
       }
       
       // Check if provider key is available
@@ -299,12 +302,15 @@ serve(async (req) => {
       const callLatency = Date.now() - callStartTime;
       console.error(`[${corrId}] Provider call failed:`, providerError);
       
-      // Log provider failure
+      // Enhanced error logging with model details
       await logOpsEvent(supabaseClient, userId, corrId, 'error', 'PROVIDER_FAILED', 'AI provider call failed', {
         provider: providerName || 'unknown',
         model: model,
         latencyMs: callLatency,
-        error: providerError.message
+        error: providerError.message,
+        errorType: providerError.constructor.name,
+        modelRequested: model,
+        providerResolved: resolveProvider(model)
       });
       
       // Rollback the wallet deduction by issuing a refund transaction
@@ -389,11 +395,21 @@ serve(async (req) => {
         }
       }
       
+      // Enhanced error message for BAD_INPUT
+      const finalMessage = errorCode === 'BAD_INPUT' 
+        ? `Model "${model}" validation failed: ${errorMessage.replace(/^[A-Z_]+:\s*/, '')}`
+        : errorMessage.replace(/^[A-Z_]+:\s*/, '');
+      
       return new Response(JSON.stringify({
         ok: false,
         error: errorCode,
-        message: errorMessage.replace(/^[A-Z_]+:\s*/, ''),
-        corrId
+        message: finalMessage,
+        corrId,
+        debug: {
+          model,
+          provider: resolveProvider(model),
+          originalError: errorMessage
+        }
       }), {
         status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

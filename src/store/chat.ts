@@ -125,14 +125,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setEstimate: (cost, tags) => set({ cost, tags, phase: 'ready' }),
 
-  selectModel: (modelId) => set({ selectedModel: modelId, error: null }),
+  selectModel: (modelId) => {
+    console.log('Selecting model:', modelId);
+    set({ selectedModel: modelId, error: null });
+  },
 
   startStream: async (userMessage, modelId) => {
     const { cost } = get();
+    
+    // Validate inputs
+    if (!userMessage?.trim()) {
+      set({ error: 'Please enter a message' });
+      return;
+    }
+    
+    if (!modelId) {
+      set({ error: 'Please select a model' });
+      return;
+    }
+    
     if (!cost) {
       set({ error: 'No cost estimate available' });
       return;
     }
+
+    console.log('Starting stream with:', { 
+      modelId, 
+      messageLength: userMessage.length, 
+      costINR: cost.inr 
+    });
 
     set({ phase: 'executing', error: null });
 
@@ -153,24 +174,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
         console.error('Chat confirm failed:', confirmResult.error);
         
         let errorMessage = 'Chat confirmation failed';
-        switch (confirmResult.error) {
-          case 'INSUFFICIENT_FUNDS':
-            errorMessage = 'Insufficient funds in your wallet. Please recharge to continue.';
-            break;
-          case 'NO_API_KEY':
-            errorMessage = 'Provider key not configured. Please contact support.';
-            break;
-          case 'RATE_LIMITED':
-            errorMessage = 'Too many requests. Please wait a moment and try again.';
-            break;
-          case 'SERVICE_UNAVAILABLE':
-            errorMessage = 'AI service is temporarily unavailable. Please try again later.';
-            break;
-          case 'UNAUTHORIZED':
-            errorMessage = 'Authentication failed. Please refresh and try again.';
-            break;
-          default:
-            errorMessage = confirmResult.message || 'Chat confirmation failed. Please try again.';
+        
+        // Better error parsing for BAD_INPUT and other provider errors
+        if (confirmResult.error === 'BAD_INPUT' || confirmResult.message?.includes('BAD_INPUT')) {
+          console.error('BAD_INPUT error for model:', modelId, confirmResult);
+          errorMessage = `Model "${modelId}" is not supported or misconfigured. Please try another model.`;
+        } else {
+          switch (confirmResult.error) {
+            case 'INSUFFICIENT_FUNDS':
+              errorMessage = 'Insufficient funds in your wallet. Please recharge to continue.';
+              break;
+            case 'NO_API_KEY':
+              errorMessage = 'Provider key not configured. Please contact support.';
+              break;
+            case 'RATE_LIMITED':
+              errorMessage = 'Too many requests. Please wait a moment and try again.';
+              break;
+            case 'SERVICE_UNAVAILABLE':
+              errorMessage = 'AI service is temporarily unavailable. Please try again later.';
+              break;
+            case 'UNAUTHORIZED':
+              errorMessage = 'Authentication failed. Please refresh and try again.';
+              break;
+            default:
+              errorMessage = confirmResult.message || 'Chat confirmation failed. Please try again.';
+          }
         }
         
         set({ 

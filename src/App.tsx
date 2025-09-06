@@ -4,8 +4,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "next-themes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import AuthGate from "./components/auth/AuthGate";
 import Index from "./pages/Index";
 import Chat from "./pages/Chat";
+import SignIn from "./pages/SignIn";
 import Recharge from "./pages/Recharge";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
@@ -26,9 +28,22 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/recharge" element={<Recharge />} />
-            <Route path="/admin" element={<Admin />} />
+            <Route path="/signin" element={<SignIn />} />
+            <Route path="/chat" element={
+              <AuthGate>
+                <Chat />
+              </AuthGate>
+            } />
+            <Route path="/recharge" element={
+              <AuthGate>
+                <Recharge />
+              </AuthGate>
+            } />
+            <Route path="/admin" element={
+              <AuthGate>
+                <Admin />
+              </AuthGate>
+            } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

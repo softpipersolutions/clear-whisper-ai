@@ -1,11 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { useChatStore } from "@/store/chat";
+import { useAuthStore } from "@/store/auth";
 import ThemeToggle from "@/components/common/ThemeToggle";
-import { Plus, Wallet, RefreshCw } from "lucide-react";
+import { Plus, Wallet, RefreshCw, LogOut, User } from "lucide-react";
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const LeftMenu = () => {
   const { wallet, isLoadingWallet, reset, loadWallet } = useChatStore();
+  const { user, signOut } = useAuthStore();
+  const navigate = useNavigate();
 
   // Load wallet data on component mount
   useEffect(() => {
@@ -14,6 +18,11 @@ const LeftMenu = () => {
 
   const handleNewChat = () => {
     reset();
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/signin');
   };
 
   return (
@@ -36,6 +45,30 @@ const LeftMenu = () => {
         >
           <Plus size={16} />
           New Chat
+        </Button>
+      </div>
+
+      {/* User Section */}
+      <div className="p-4 border-b border-border">
+        <div className="flex items-center space-x-3 mb-3">
+          <div className="h-8 w-8 bg-secondary rounded-full flex items-center justify-center">
+            <User className="h-4 w-4 text-secondary-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">
+              {user?.email || 'User'}
+            </p>
+          </div>
+        </div>
+        
+        <Button
+          onClick={handleSignOut}
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Sign Out
         </Button>
       </div>
 
@@ -70,7 +103,7 @@ const LeftMenu = () => {
         </div>
         
         <Button
-          onClick={() => window.location.href = '/recharge'}
+          onClick={() => navigate('/recharge')}
           variant="outline"
           size="sm"
           className="w-full h-8 text-xs"

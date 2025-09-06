@@ -42,9 +42,9 @@ function mapModelName(requestedModel: string): string {
   return MODEL_MAPPING[requestedModel] || requestedModel;
 }
 
-function formatModelForAPI(model: string): string {
-  // Add models/ prefix if not present
-  return model.startsWith('models/') ? model : `models/${model}`;
+// Legacy model name mapping for backward compatibility
+function mapModelName(requestedModel: string): string {
+  return MODEL_MAPPING[requestedModel] || requestedModel;
 }
 
 serve(async (req) => {
@@ -95,11 +95,10 @@ serve(async (req) => {
       const isImageModel = context.request.model.includes('image');
       const isLiveModel = context.request.model.includes('live');
 
-      // Prepare chat arguments with Gemini-specific format
-      const modelForAPI = formatModelForAPI(context.request.model);
-      
+      // Prepare chat arguments with Gemini-specific format  
+      // Don't add models/ prefix here - let the provider handle it
       const chatArgs: any = {
-        model: modelForAPI
+        model: context.request.model // Use raw model name
       };
 
       // Handle system message (system instructions in Gemini)

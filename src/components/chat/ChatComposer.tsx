@@ -2,11 +2,11 @@ import { useState, KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useChatStore } from "@/store/chat";
+import { useConversationsStore } from "@/store/conversations";
 import { Send, Square } from "lucide-react";
 
 const ChatComposer = () => {
   const { 
-    query, 
     phase, 
     selectedModel, 
     setQuery, 
@@ -15,8 +15,13 @@ const ChatComposer = () => {
     stopStream,
     error 
   } = useChatStore();
+  
+  const { 
+    activeChatId, 
+    createNewChat 
+  } = useConversationsStore();
 
-  const [localQuery, setLocalQuery] = useState(query);
+  const [localQuery, setLocalQuery] = useState('');
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -25,10 +30,16 @@ const ChatComposer = () => {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!localQuery.trim()) return;
     
     setQuery(localQuery);
+    
+    // Create new chat if none is active
+    let chatId = activeChatId;
+    if (!chatId) {
+      chatId = await createNewChat();
+    }
     
     // If we have a selected model and are ready, start streaming
     if (phase === 'ready' && selectedModel) {

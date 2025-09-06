@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useConversationsStore } from './conversations';
 
 export interface Message {
   role: 'user' | 'assistant';

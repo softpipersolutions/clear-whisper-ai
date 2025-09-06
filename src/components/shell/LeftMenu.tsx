@@ -1,28 +1,62 @@
 import { Button } from "@/components/ui/button";
 import { useChatStore } from "@/store/chat";
+import { useConversationsStore } from "@/store/conversations";
 import { useAuthStore } from "@/store/auth";
 import ThemeToggle from "@/components/common/ThemeToggle";
-import { Plus, Wallet, RefreshCw, LogOut, User } from "lucide-react";
-import { useEffect } from "react";
+import { Plus, Wallet, RefreshCw, LogOut, User, MessageSquare, Archive } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const LeftMenu = () => {
   const { wallet, isLoadingWallet, reset, loadWallet } = useChatStore();
+  const { 
+    chatList, 
+    activeChatId, 
+    isLoadingChats, 
+    loadChatList, 
+    openChat, 
+    archiveChat,
+    createNewChat 
+  } = useConversationsStore();
   const { user, signOut } = useAuthStore();
   const navigate = useNavigate();
+  const [archivingChats, setArchivingChats] = useState<Set<string>>(new Set());
 
-  // Load wallet data on component mount
+  // Load wallet data and chat list on component mount
   useEffect(() => {
     loadWallet();
-  }, [loadWallet]);
+    loadChatList();
+  }, [loadWallet, loadChatList]);
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     reset();
+    await createNewChat();
   };
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/signin');
+  };
+
+  const handleChatClick = (chatId: string) => {
+    openChat(chatId);
+  };
+
+  const handleArchiveChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setArchivingChats(prev => new Set([...prev, chatId]));
+    try {
+      await archiveChat(chatId);
+    } catch (error) {
+      console.error('Failed to archive chat:', error);
+    } finally {
+      setArchivingChats(prev => {
+        const next = new Set([...prev]);
+        next.delete(chatId);
+        return next;
+      });
+    }
   };
 
   return (
@@ -72,11 +106,64 @@ const LeftMenu = () => {
         </Button>
       </div>
 
-      {/* Main content area - placeholder for chat history */}
-      <div className="flex-1 p-4">
-        <div className="text-sm text-muted-foreground">
-          Chat history will appear here
+      {/* Chat History */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-border">
+          <h3 className="font-semibold text-foreground mb-2">Recent Chats</h3>
         </div>
+        
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-1">
+            {isLoadingChats ? (
+              // Loading skeleton
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="p-3 rounded-lg animate-pulse">
+                  <div className="h-4 bg-muted rounded mb-2" />
+                  <div className="h-3 bg-muted/70 rounded w-2/3" />
+                </div>
+              ))
+            ) : chatList.length === 0 ? (
+              <div className="p-4 text-center text-muted-foreground text-sm">
+                No chats yet. Start a new conversation!
+              </div>
+            ) : (
+              chatList.map((chat) => (
+                <div
+                  key={chat.id}
+                  onClick={() => handleChatClick(chat.id)}
+                  className={`
+                    group p-3 rounded-lg cursor-pointer transition-colors duration-200 relative
+                    ${activeChatId === chat.id 
+                      ? 'bg-accent/20 border border-accent/30' 
+                      : 'hover:bg-muted/50'
+                    }
+                  `}
+                >
+                  <div className="flex items-start gap-2">
+                    <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {chat.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(chat.updatedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Button
+                      onClick={(e) => handleArchiveChat(chat.id, e)}
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      disabled={archivingChats.has(chat.id)}
+                    >
+                      <Archive className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </ScrollArea>
       </div>
 
       {/* Wallet */}

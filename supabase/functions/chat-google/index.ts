@@ -49,9 +49,14 @@ serve(async (req) => {
     try {
       console.log(`[${corrId}] Calling Google Gemini for model: ${context.request.model}`);
 
+      // Ensure model has the models/ prefix for the API
+      const modelForAPI = context.request.model.startsWith('models/') 
+        ? context.request.model 
+        : `models/${context.request.model}`;
+
       // Use the exact same format as your OpenAI implementation but adapted for Gemini
       const chatArgs = {
-        model: context.request.model,
+        model: modelForAPI,
         messages: [
           {
             role: 'user',

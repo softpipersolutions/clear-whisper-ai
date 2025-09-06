@@ -1,276 +1,215 @@
-// Real provider adapters for OpenAI, Anthropic, and Google Gemini
-// Server-side only - never expose API keys to client
+// supabase/functions/_shared/providers.ts
+// Unified provider adapters for OpenAI, Anthropic, Google Gemini.
+// All calls are SERVER-SIDE ONLY. Never expose keys client-side.
 
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
+type Role = 'user' | 'assistant' | 'system';
 
-export interface ChatArgs {
+export type ChatArgs = {
   model: string;
-  messages: ChatMessage[];
+  messages: Array<{ role: Role; content: string }>;
   temperature?: number;
   max_tokens?: number;
-}
+};
 
-export interface ChatOut {
+export type ChatOut = {
   text: string;
   tokensIn: number;
   tokensOut: number;
   finishReason: string;
+};
+
+// ---------- Small utilities ----------
+
+export class ProviderError extends Error {
+  code: string;
+  status: number;
+  constructor(code: string, message: string, status = 500) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
 }
 
-// Error code mapping for consistent responses
-export function mapProviderError(error: any, provider: string): string {
-  const message = error.message?.toLowerCase() || '';
-  
-  if (error.status === 401 || message.includes('unauthorized') || message.includes('invalid api key')) {
-    return 'UNAUTHORIZED';
-  }
-  if (error.status === 400 || message.includes('bad request') || message.includes('invalid')) {
-    return 'BAD_INPUT';
-  }
-  if (error.status === 429 || message.includes('rate limit') || message.includes('quota')) {
-    return 'RATE_LIMITED';
-  }
-  if (error.status >= 500 || message.includes('service unavailable') || message.includes('timeout')) {
-    return 'SERVICE_UNAVAILABLE';
-  }
-  
-  return 'INTERNAL';
+function nowMs() { return Date.now(); }
+
+async function delay(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
-// Retry logic with timeout and backoff
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  operationName: string,
-  timeoutMs = 15000,
-  maxRetries = 1
-): Promise<T> {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+async function fetchWithTimeoutRetry(
+  url: string,
+  init: RequestInit & { timeoutMs?: number; retries?: number } = {},
+): Promise<Response> {
+  const timeoutMs = init.timeoutMs ?? 15000;
+  const retries = init.retries ?? 1;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), timeoutMs);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-      
-      const result = await operation();
-      clearTimeout(timeoutId);
-      return result;
-    } catch (error) {
-      if (attempt === maxRetries) {
-        throw error;
-      }
-      
-      // Backoff delay before retry
-      await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      const res = await fetch(url, { ...init, signal: ac.signal });
+      clearTimeout(t);
+      return res;
+    } catch (err) {
+      clearTimeout(t);
+      if (attempt === retries) throw err;
+      await delay(250);
     }
   }
-  
-  throw new Error(`${operationName} failed after ${maxRetries + 1} attempts`);
+  // Unreachable
+  throw new Error('UNREACHABLE_FETCH');
 }
+
+function mapHttpToCode(provider: 'openai' | 'anthropic' | 'google', status: number): ProviderError {
+  if (status === 400) return new ProviderError('BAD_INPUT', `${provider}: bad input`, 400);
+  if (status === 401 || status === 403) return new ProviderError('UNAUTHORIZED', `${provider}: unauthorized`, 401);
+  if (status === 404) return new ProviderError('NOT_FOUND', `${provider}: not found`, 404);
+  if (status === 409) return new ProviderError('CONFLICT', `${provider}: conflict`, 409);
+  if (status === 429) return new ProviderError('RATE_LIMITED', `${provider}: rate limited`, 429);
+  if (status >= 500) return new ProviderError('SERVICE_UNAVAILABLE', `${provider}: upstream error`, 503);
+  return new ProviderError('INTERNAL', `${provider}: unexpected ${status}`, status);
+}
+
+// NOTE: Realtime models (e.g., gpt-realtime) require WS/WebRTC channels, not this HTTP path.
+export function isHttpUnsupportedModel(model: string): boolean {
+  return model === 'gpt-realtime';
+}
+
+export function resolveProvider(model: string): 'openai' | 'anthropic' | 'google' | 'unknown' {
+  if (model.startsWith('gpt-')) return 'openai';
+  if (model.startsWith('claude')) return 'anthropic';
+  if (model.startsWith('models/gemini')) return 'google';
+  return 'unknown';
+}
+
+export function isProviderAvailable(p: 'openai' | 'anthropic' | 'google'): boolean {
+  if (p === 'openai') return !!Deno.env.get('OPENAI_API_KEY');
+  if (p === 'anthropic') return !!Deno.env.get('ANTHROPIC_API_KEY');
+  if (p === 'google') return !!Deno.env.get('GOOGLE_API_KEY');
+  return false;
+}
+
+// ---------- OpenAI ----------
 
 export async function callOpenAI(args: ChatArgs): Promise<ChatOut> {
-  const apiKey = Deno.env.get('OPENAI_API_KEY');
-  if (!apiKey) {
-    throw new Error('NO_API_KEY: OpenAI API key not configured');
+  const key = Deno.env.get('OPENAI_API_KEY');
+  if (!key) throw new ProviderError('NO_API_KEY', 'OpenAI key missing', 401);
+  if (isHttpUnsupportedModel(args.model)) {
+    throw new ProviderError('BAD_INPUT', 'gpt-realtime requires a realtime channel', 400);
   }
 
-  const operation = async () => {
-    const controller = new AbortController();
-    
-    // Determine if this is a newer model that uses max_completion_tokens
-    const isNewerModel = ['gpt-5', 'gpt-4.1', 'o3', 'o4'].some(prefix => 
-      args.model.startsWith(prefix)
-    );
-    
-    const requestBody: any = {
-      model: args.model,
-      messages: args.messages,
-    };
-    
-    // Use appropriate token parameter based on model
-    if (args.max_tokens) {
-      if (isNewerModel) {
-        requestBody.max_completion_tokens = args.max_tokens;
-      } else {
-        requestBody.max_tokens = args.max_tokens;
-      }
-    }
-    
-    // Only add temperature for older models
-    if (args.temperature !== undefined && !isNewerModel) {
-      requestBody.temperature = args.temperature;
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI API error:', errorText);
-      const error = new Error(`OpenAI API error: ${response.status}`);
-      (error as any).status = response.status;
-      throw error;
-    }
-
-    const data = await response.json();
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid OpenAI response format');
-    }
-
-    return {
-      text: data.choices[0].message.content || '',
-      tokensIn: data.usage?.prompt_tokens || 0,
-      tokensOut: data.usage?.completion_tokens || 0,
-      finishReason: data.choices[0].finish_reason || 'unknown'
-    };
+  const started = nowMs();
+  const body = {
+    model: args.model,
+    messages: args.messages,
+    temperature: args.temperature ?? 0.3,
+    max_tokens: args.max_tokens ?? 512,
+    stream: false,
   };
 
-  try {
-    return await withRetry(operation, 'OpenAI API call');
-  } catch (error) {
-    const errorCode = mapProviderError(error, 'openai');
-    const enhancedError = new Error(`${errorCode}: ${error.message}`);
-    (enhancedError as any).status = (error as any).status;
-    throw enhancedError;
-  }
+  const res = await fetchWithTimeoutRetry('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    timeoutMs: 15000,
+    retries: 1,
+  });
+
+  if (!res.ok) throw mapHttpToCode('openai', res.status);
+
+  const json = await res.json();
+  const choice = json?.choices?.[0];
+  const text = choice?.message?.content ?? '';
+  const usage = json?.usage || {};
+  const out: ChatOut = {
+    text,
+    tokensIn: usage.prompt_tokens ?? 0,
+    tokensOut: usage.completion_tokens ?? 0,
+    finishReason: choice?.finish_reason ?? 'stop',
+  };
+  // you can log latency (nowMs() - started) in caller
+  return out;
 }
+
+// ---------- Anthropic ----------
 
 export async function callAnthropic(args: ChatArgs): Promise<ChatOut> {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!apiKey) {
-    throw new Error('NO_API_KEY: Anthropic API key not configured');
-  }
+  const key = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!key) throw new ProviderError('NO_API_KEY', 'Anthropic key missing', 401);
 
-  const operation = async () => {
-    const controller = new AbortController();
-    
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: args.model,
-        max_tokens: args.max_tokens || 1000,
-        temperature: args.temperature,
-        messages: args.messages,
-      }),
-      signal: controller.signal,
-    });
+  // Convert OpenAI-style messages -> Anthropic format (nearly identical roles)
+  const messages = args.messages.map((m) => ({ role: m.role, content: m.content }));
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Anthropic API error:', errorText);
-      const error = new Error(`Anthropic API error: ${response.status}`);
-      (error as any).status = response.status;
-      throw error;
-    }
+  const res = await fetchWithTimeoutRetry('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: args.model,
+      max_tokens: args.max_tokens ?? 512,
+      temperature: args.temperature ?? 0.3,
+      messages,
+    }),
+    timeoutMs: 15000,
+    retries: 1,
+  });
 
-    const data = await response.json();
-    
-    if (!data.content || !data.content[0] || !data.content[0].text) {
-      throw new Error('Invalid Anthropic response format');
-    }
+  if (!res.ok) throw mapHttpToCode('anthropic', res.status);
 
-    return {
-      text: data.content[0].text,
-      tokensIn: data.usage?.input_tokens || 0,
-      tokensOut: data.usage?.output_tokens || 0,
-      finishReason: data.stop_reason || 'unknown'
-    };
+  const json = await res.json();
+  const text = json?.content?.[0]?.text ?? '';
+  const usage = json?.usage || {};
+  return {
+    text,
+    tokensIn: usage.input_tokens ?? 0,
+    tokensOut: usage.output_tokens ?? 0,
+    finishReason: json?.stop_reason ?? 'stop',
   };
-
-  try {
-    return await withRetry(operation, 'Anthropic API call');
-  } catch (error) {
-    const errorCode = mapProviderError(error, 'anthropic');
-    const enhancedError = new Error(`${errorCode}: ${error.message}`);
-    (enhancedError as any).status = (error as any).status;
-    throw enhancedError;
-  }
 }
 
+// ---------- Google Gemini ----------
+
 export async function callGemini(args: ChatArgs): Promise<ChatOut> {
-  const apiKey = Deno.env.get('GOOGLE_API_KEY');
-  if (!apiKey) {
-    throw new Error('NO_API_KEY: Google API key not configured');
-  }
+  const key = Deno.env.get('GOOGLE_API_KEY');
+  if (!key) throw new ProviderError('NO_API_KEY', 'Google Gemini key missing', 401);
 
-  const operation = async () => {
-    const controller = new AbortController();
-    
-    // Convert messages to Gemini format
-    const contents = args.messages.map(message => ({
-      role: message.role === 'assistant' ? 'model' : message.role,
-      parts: [{ text: message.content }]
-    }));
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(args.model)}:generateContent?key=${key}`;
+  const contents = args.messages.map((m) => ({
+    role: m.role,
+    parts: [{ text: m.content }],
+  }));
 
-    const requestBody: any = {
+  const res = await fetchWithTimeoutRetry(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       contents,
-    };
+      generationConfig: {
+        temperature: args.temperature ?? 0.3,
+        maxOutputTokens: args.max_tokens ?? 512,
+      },
+    }),
+    timeoutMs: 15000,
+    retries: 1,
+  });
 
-    if (args.temperature !== undefined || args.max_tokens !== undefined) {
-      requestBody.generationConfig = {};
-      if (args.temperature !== undefined) {
-        requestBody.generationConfig.temperature = args.temperature;
-      }
-      if (args.max_tokens !== undefined) {
-        requestBody.generationConfig.maxOutputTokens = args.max_tokens;
-      }
-    }
+  if (!res.ok) throw mapHttpToCode('google', res.status);
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${args.model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      }
-    );
+  const json = await res.json();
+  const parts = json?.candidates?.[0]?.content?.parts ?? [];
+  const text = parts.map((p: any) => p?.text ?? '').join('');
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Google Gemini API error:', errorText);
-      const error = new Error(`Google Gemini API error: ${response.status}`);
-      (error as any).status = response.status;
-      throw error;
-    }
-
-    const data = await response.json();
-    
-    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts) {
-      throw new Error('Invalid Google Gemini response format');
-    }
-
-    const text = data.candidates[0].content.parts[0]?.text || '';
-    
-    return {
-      text,
-      tokensIn: data.usageMetadata?.promptTokenCount || 0,
-      tokensOut: data.usageMetadata?.candidatesTokenCount || 0,
-      finishReason: data.candidates[0].finishReason || 'unknown'
-    };
+  // Gemini may omit usage; default to 0 when absent
+  return {
+    text,
+    tokensIn: json?.usageMetadata?.promptTokenCount ?? 0,
+    tokensOut: json?.usageMetadata?.candidatesTokenCount ?? 0,
+    finishReason: json?.candidates?.[0]?.finishReason ?? 'stop',
   };
-
-  try {
-    return await withRetry(operation, 'Google Gemini API call');
-  } catch (error) {
-    const errorCode = mapProviderError(error, 'google');
-    const enhancedError = new Error(`${errorCode}: ${error.message}`);
-    (enhancedError as any).status = (error as any).status;
-    throw enhancedError;
-  }
 }

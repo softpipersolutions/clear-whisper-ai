@@ -1,0 +1,2 @@
+-- Disable JWT verification for razorpay-webhook to allow external calls
+-- This will be added to the config.toml automatically

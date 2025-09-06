@@ -168,7 +168,10 @@ const callFunction = async <T>(
   timeoutMs: number = 1500
 ): Promise<T> => {
   try {
-    const functionCall = supabase.functions.invoke(functionName, body ? { body } : undefined);
+    // Frontend fix: Use GET when no body is provided, POST when body exists
+    const functionCall = body !== undefined 
+      ? supabase.functions.invoke(functionName, { body })  // POST
+      : supabase.functions.invoke(functionName);           // GET
     const timeoutPromise = createTimeoutPromise(timeoutMs);
     
     const result = await Promise.race([functionCall, timeoutPromise]);

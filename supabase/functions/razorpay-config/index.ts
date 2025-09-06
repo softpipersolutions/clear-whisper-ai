@@ -23,9 +23,16 @@ serve(async (req) => {
   }
 
   try {
-    console.log(`[${corrId}] Razorpay config request`);
+    // Enhanced logging with method and mode
+    console.info(JSON.stringify({ 
+      corrId, 
+      fn: 'razorpay-config', 
+      method: req.method, 
+      mode: Deno.env.get('RAZORPAY_MODE') 
+    }));
 
-    if (req.method !== 'GET') {
+    // Backend tolerance: Accept both GET and POST
+    if (req.method !== 'GET' && req.method !== 'POST') {
       throw new Error('Method not allowed');
     }
 

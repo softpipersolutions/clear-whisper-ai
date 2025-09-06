@@ -3,12 +3,13 @@ import { callGemini, ProviderError } from "../_shared/providers.ts";
 import { corsHeaders, setupChatRequest, processCommonValidation, rollbackWallet, createSuccessResponse, createErrorResponse } from "../_shared/chat-common.ts";
 import { logOpsEvent } from "../_shared/hardening.ts";
 
-// Google Gemini supported models
+// Google Gemini supported models - matches catalog exactly
 const GOOGLE_MODELS = [
-  'gemini-1.5-pro',
-  'gemini-1.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.5-flash', 
   'gemini-2.0-flash',
-  'gemini-2.5-flash'
+  'gemini-1.5-pro',
+  'gemini-1.5-flash'
 ];
 
 serve(async (req) => {

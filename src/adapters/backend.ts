@@ -1,5 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 
+// Razorpay configuration interface
+export interface RazorpayConfig {
+  mode: 'TEST' | 'LIVE';
+  keyId: string;
+  isTestMode: boolean;
+}
+
 // Error types for normalized error handling
 export type BackendErrorType = 'NETWORK' | 'TIMEOUT' | 'BACKEND_BAD_SHAPE' | 'INSUFFICIENT_FUNDS';
 
@@ -214,6 +221,10 @@ export const getWallet = async (): Promise<WalletResponse> => {
 
 export const createOrder = async (data: CreateOrderRequest): Promise<CreateOrderResponse> => {
   return callFunction<CreateOrderResponse>('create-order', data);
+};
+
+export const getRazorpayConfig = async (): Promise<RazorpayConfig> => {
+  return callFunction<RazorpayConfig>('razorpay-config');
 };
 
 // Admin functions

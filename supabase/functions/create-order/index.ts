@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { generateCorrId, logOpsEvent } from "../_shared/hardening.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,13 +22,15 @@ interface CreateOrderResponse {
 }
 
 serve(async (req) => {
+  const corrId = generateCorrId();
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Create order function called');
+    console.log(`[${corrId}] Create order function called`);
     
     if (req.method !== 'POST') {
       throw new Error('Method not allowed');
@@ -75,7 +78,23 @@ serve(async (req) => {
 
     console.log(`Converted amount: ${amountINR} INR`);
 
-    // Get Razorpay credentials
+    // Get Razorpay mode and credentials
+    const razorpayMode = Deno.env.get('RAZORPAY_MODE') || 'TEST';
+    const liveOk = Deno.env.get('LIVE_OK');
+    const appUrl = Deno.env.get('NEXT_PUBLIC_APP_URL');
+    
+    // Validate LIVE mode requirements
+    if (razorpayMode === 'LIVE') {
+      if (!liveOk || liveOk !== 'true') {
+        throw new Error('LIVE mode not authorized - LIVE_OK flag required');
+      }
+      if (!appUrl || appUrl.includes('lovable.app')) {
+        throw new Error('LIVE mode requires verified custom domain');
+      }
+    }
+    
+    console.log(`[${razorpayMode}] Creating order for user: ${user.id}, amount: ${amountInDisplay} ${currency}`);
+    
     const razorpayKeyId = Deno.env.get('RAZORPAY_KEY_ID');
     const razorpayKeySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
     
@@ -122,15 +141,35 @@ serve(async (req) => {
       display_currency: currency
     };
 
-    console.log('Order created successfully:', response);
+    // Log successful order creation
+    await logOpsEvent(supabaseClient, user.id, corrId, 'info', 'ORDER_CREATED', `[${razorpayMode}] Order created successfully`, {
+      orderId: razorpayOrder.id,
+      amount: amountINR,
+      mode: razorpayMode
+    });
+
+    console.log(`[${corrId}] Order created successfully:`, response);
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error in create-order function:', error);
+    console.error(`[${corrId}] Error in create-order function:`, error);
+    
+    // Log error
+    try {
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      await logOpsEvent(supabaseClient, null, corrId, 'error', 'ORDER_CREATE_ERROR', 'Failed to create order', { error: error.message });
+    } catch (logError) {
+      console.error(`[${corrId}] Failed to log error:`, logError);
+    }
+    
     return new Response(JSON.stringify({ 
-      error: error.message || 'Internal server error' 
+      error: error.message || 'Internal server error',
+      corrId 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, CreditCard, RefreshCw } from "lucide-react";
 import { useChatStore } from "@/store/chat";
-import { createOrder } from "@/adapters/backend";
+import { createOrder, getRazorpayConfig, type RazorpayConfig } from "@/adapters/backend";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 
@@ -20,11 +20,40 @@ const RechargePage = () => {
   const [currency] = useState<string>("INR");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isWaitingForConfirmation, setIsWaitingForConfirmation] = useState(false);
+  const [razorpayConfig, setRazorpayConfig] = useState<RazorpayConfig | null>(null);
   
   const { wallet, loadWallet } = useChatStore();
   const { toast } = useToast();
 
+  // Load Razorpay configuration on mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const config = await getRazorpayConfig();
+        setRazorpayConfig(config);
+      } catch (error) {
+        console.error('Failed to load Razorpay config:', error);
+        toast({
+          title: "Configuration Error",
+          description: "Failed to load payment configuration. Please try again.",
+          variant: "destructive"
+        });
+      }
+    };
+    
+    loadConfig();
+  }, [toast]);
+
   const handlePayment = async () => {
+    if (!razorpayConfig) {
+      toast({
+        title: "Configuration Error",
+        description: "Payment configuration not loaded. Please refresh the page.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const amountNum = parseFloat(amount);
     if (!amountNum || amountNum <= 0) {
       toast({
@@ -55,11 +84,8 @@ const RechargePage = () => {
 
       console.log('Order created:', orderResponse);
 
-      // Get Razorpay key from environment (will be added to config)
-      const RAZORPAY_KEY_ID = 'rzp_test_dummy_key'; // This should come from env in production
-
       const options = {
-        key: RAZORPAY_KEY_ID,
+        key: razorpayConfig.keyId,
         amount: orderResponse.amount_inr * 100, // Amount in paise
         currency: 'INR',
         name: 'ClearChat',
@@ -138,7 +164,14 @@ const RechargePage = () => {
           >
             <ArrowLeft size={20} />
           </Button>
-          <h1 className="text-2xl font-bold text-foreground">Recharge Wallet</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-foreground">Recharge Wallet</h1>
+            {razorpayConfig?.isTestMode && (
+              <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">
+                Sandbox
+              </Badge>
+            )}
+          </div>
         </motion.div>
 
         {/* Current Balance */}
@@ -226,11 +259,16 @@ const RechargePage = () => {
         >
           <Button
             onClick={handlePayment}
-            disabled={!amount || parseFloat(amount) < 10 || isProcessing || isWaitingForConfirmation}
+            disabled={!amount || parseFloat(amount) < 10 || isProcessing || isWaitingForConfirmation || !razorpayConfig}
             className="w-full h-12 text-lg bg-accent hover:bg-accent/90 text-accent-foreground"
             size="lg"
           >
-            {isProcessing ? (
+            {!razorpayConfig ? (
+              <>
+                <RefreshCw size={20} className="mr-2 animate-spin" />
+                Loading Configuration...
+              </>
+            ) : isProcessing ? (
               <>
                 <RefreshCw size={20} className="mr-2 animate-spin" />
                 Opening Payment...

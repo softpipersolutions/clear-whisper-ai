@@ -17,6 +17,9 @@ serve(async (req) => {
   }
 
   console.log(`[${corrId}] Razorpay webhook received`);
+  
+  // Get Razorpay mode for logging
+  const razorpayMode = Deno.env.get('RAZORPAY_MODE') || 'TEST';
 
   try {
     if (req.method !== 'POST') {
@@ -138,8 +141,8 @@ serve(async (req) => {
         // Don't fail the webhook for transaction logging errors
       }
 
-      await logOpsEvent(supabaseClient, userId, corrId, 'info', 'PAYMENT_CREDITED', 'Successfully credited payment to wallet', 
-        { orderId, paymentId: payment.id, amount: amountPaid });
+      await logOpsEvent(supabaseClient, userId, corrId, 'info', 'PAYMENT_CREDITED', `[${razorpayMode}] Successfully credited payment to wallet`, 
+        { orderId, paymentId: payment.id, amount: amountPaid, mode: razorpayMode });
       
       console.log(`[${corrId}] Payment processing completed successfully`);
     } else {

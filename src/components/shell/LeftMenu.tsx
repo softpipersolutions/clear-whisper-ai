@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { useChatStore } from "@/store/chat";
 import { useConversationsStore } from "@/store/conversations";
 import { useAuthStore } from "@/store/auth";
+import { useFxStore } from "@/store/fx";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import { Plus, Wallet, RefreshCw, LogOut, User, MessageSquare, Archive } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -20,14 +21,23 @@ const LeftMenu = () => {
     createNewChat 
   } = useConversationsStore();
   const { user, signOut } = useAuthStore();
+  const { convertFromINR, fetchFxRate, rates } = useFxStore();
   const navigate = useNavigate();
   const [archivingChats, setArchivingChats] = useState<Set<string>>(new Set());
+
+  // Get user's preferred currency
+  const userCurrency = user?.user_metadata?.preferred_currency || 'INR';
 
   // Load wallet data and chat list on component mount
   useEffect(() => {
     loadWallet();
     loadChatList();
-  }, [loadWallet, loadChatList]);
+    
+    // Fetch FX rate for user's preferred currency if not INR
+    if (userCurrency !== 'INR') {
+      fetchFxRate(userCurrency);
+    }
+  }, [loadWallet, loadChatList, fetchFxRate, userCurrency]);
 
   const handleNewChat = async () => {
     reset();
@@ -175,7 +185,19 @@ const LeftMenu = () => {
             {isLoadingWallet ? (
               <div className="w-12 h-4 bg-muted animate-pulse rounded" />
             ) : (
-              <span className="font-medium text-foreground">₹{wallet.inr.toFixed(2)}</span>
+              <div className="flex flex-col">
+                {userCurrency === 'INR' ? (
+                  <span className="font-medium text-foreground">₹{wallet.inr.toFixed(2)}</span>
+                ) : (
+                  <>
+                    <span className="font-medium text-foreground">
+                      {userCurrency === 'USD' ? '$' : userCurrency === 'EUR' ? '€' : userCurrency + ' '}
+                      {convertFromINR(wallet.inr, userCurrency).toFixed(2)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">≈ ₹{wallet.inr.toFixed(2)}</span>
+                  </>
+                )}
+              </div>
             )}
           </div>
           <Button

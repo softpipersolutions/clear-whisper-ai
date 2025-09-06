@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,11 +8,11 @@ const corsHeaders = {
 };
 
 interface FxResponse {
-  rate: number;
-  lastUpdated: string;
+  base: string;
+  rates: Record<string, number>;
+  fetchedAt: string;
   stale?: boolean;
-  from: string;
-  to: string;
+  error?: string;
 }
 
 serve(async (req) => {
@@ -23,39 +24,117 @@ serve(async (req) => {
   try {
     console.log('FX function called');
 
-    if (req.method !== 'GET') {
+    if (req.method !== 'POST') {
       throw new Error('Method not allowed');
     }
 
-    const url = new URL(req.url);
-    const toCurrency = url.searchParams.get('to') || 'USD';
-    
-    console.log(`FX rate requested: INR to ${toCurrency}`);
+    // Create Supabase client with service role for database operations
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
-    // Mock exchange rates - in real implementation this would fetch from a live API
-    const mockRates: Record<string, number> = {
-      'USD': 0.012, // 1 INR = 0.012 USD
-      'EUR': 0.011, // 1 INR = 0.011 EUR
-      'GBP': 0.0095, // 1 INR = 0.0095 GBP
-      'INR': 1.0 // 1 INR = 1 INR
-    };
-
-    const rate = mockRates[toCurrency.toUpperCase()];
+    const body = await req.json();
+    const toParam = body.to || 'USD';
+    const toCurrencies = toParam.split(',').map(c => c.trim().toUpperCase());
     
-    if (!rate) {
-      throw new Error(`Unsupported currency: ${toCurrency}`);
+    console.log(`FX rates requested for: ${toCurrencies.join(', ')}`);
+
+    // Check latest cached rate
+    const { data: cachedData, error: cacheError } = await supabaseClient
+      .from('fx_rates')
+      .select('*')
+      .order('fetched_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (cacheError && cacheError.code !== 'PGRST116') {
+      console.error('Cache fetch error:', cacheError);
     }
 
-    // Simulate data age - mark as stale if older than 1 hour
-    const lastUpdated = new Date();
-    lastUpdated.setMinutes(lastUpdated.getMinutes() - 30); // 30 minutes ago
+    const now = new Date();
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
     
+    let rates = {};
+    let fetchedAt = '';
+    let stale = false;
+
+    // Check if cached data is fresh (≤6h old)
+    if (cachedData && new Date(cachedData.fetched_at) > sixHoursAgo) {
+      console.log('Using fresh cached rates');
+      rates = cachedData.rates;
+      fetchedAt = cachedData.fetched_at;
+    } else {
+      console.log('Cache stale or missing, fetching from API');
+      
+      try {
+        // Fetch from ExchangeRate.host (free, no API key required)
+        const apiResponse = await fetch('https://api.exchangerate.host/latest?base=INR');
+        
+        if (!apiResponse.ok) {
+          throw new Error(`API response not OK: ${apiResponse.status}`);
+        }
+        
+        const apiData = await apiResponse.json();
+        
+        if (!apiData.success || !apiData.rates) {
+          throw new Error('Invalid API response format');
+        }
+
+        console.log('Successfully fetched rates from API');
+        
+        // Store new rates in database
+        const { error: insertError } = await supabaseClient
+          .from('fx_rates')
+          .insert({
+            base: 'INR',
+            rates: apiData.rates,
+            fetched_at: now.toISOString()
+          });
+
+        if (insertError) {
+          console.error('Failed to cache rates:', insertError);
+          // Continue with API data even if caching fails
+        }
+
+        rates = apiData.rates;
+        fetchedAt = now.toISOString();
+        
+      } catch (apiError) {
+        console.error('External API failed:', apiError);
+        
+        // Fallback to last cached data if available
+        if (cachedData) {
+          console.log('Using stale cached rates as fallback');
+          rates = cachedData.rates;
+          fetchedAt = cachedData.fetched_at;
+          stale = true;
+        } else {
+          console.log('No cached data available');
+          return new Response(JSON.stringify({ 
+            error: 'FX_UNAVAILABLE',
+            message: 'Exchange rates unavailable'
+          }), {
+            status: 503,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+    }
+
+    // Filter rates to requested currencies
+    const filteredRates: Record<string, number> = {};
+    for (const currency of toCurrencies) {
+      if (rates[currency]) {
+        filteredRates[currency] = rates[currency];
+      }
+    }
+
     const response: FxResponse = {
-      rate,
-      lastUpdated: lastUpdated.toISOString(),
-      stale: false, // 30 minutes old, not stale yet
-      from: 'INR',
-      to: toCurrency.toUpperCase()
+      base: 'INR',
+      rates: filteredRates,
+      fetchedAt,
+      ...(stale && { stale: true })
     };
 
     console.log('FX response:', response);
@@ -66,7 +145,8 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in fx function:', error);
     return new Response(JSON.stringify({ 
-      error: error.message || 'Internal server error' 
+      error: 'INTERNAL_ERROR',
+      message: error.message || 'Internal server error' 
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,15 +1,30 @@
 import { useChatStore } from "@/store/chat";
+import { useAuthStore } from "@/store/auth";
+import { useFxStore } from "@/store/fx";
 import { filterByTags } from "@/services/models";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton, SkeletonCard, SkeletonText } from "@/components/common/Skeleton";
 import InlineBanner from "@/components/common/InlineBanner";
-import { IndianRupee, Clock, FileText } from "lucide-react";
+import { IndianRupee, Clock, FileText, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useEffect } from "react";
 
 const RightModels = () => {
   const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation } = useChatStore();
+  const { user } = useAuthStore();
+  const { convertFromINR, fetchFxRate, isStale, rates, error: fxError } = useFxStore();
+  
+  // Get user's preferred currency
+  const userCurrency = user?.user_metadata?.preferred_currency || 'INR';
+  
+  // Fetch FX rate when component mounts or currency changes
+  useEffect(() => {
+    if (userCurrency !== 'INR' && cost) {
+      fetchFxRate(userCurrency);
+    }
+  }, [userCurrency, cost, fetchFxRate]);
 
   const models = filterByTags(tags);
 
@@ -62,8 +77,29 @@ const RightModels = () => {
     );
   }
 
+  // Check if FX rates are stale
+  const isRateStale = userCurrency !== 'INR' && isStale(userCurrency);
+  
   return (
     <div className="p-4 space-y-4">
+      {/* FX Stale Banner */}
+      {isRateStale && (
+        <InlineBanner
+          type="warning"
+          title="Exchange Rates Outdated"
+          message="Exchange rates may be outdated. Displayed amounts are approximate."
+        />
+      )}
+      
+      {/* FX Error Banner */}
+      {fxError === 'FX_UNAVAILABLE' && userCurrency !== 'INR' && (
+        <InlineBanner
+          type="error"
+          title="Exchange Rates Unavailable"
+          message="Unable to load exchange rates. Showing amounts in INR only."
+        />
+      )}
+      
       {/* Error Banner */}
       {error && error !== 'INSUFFICIENT_FUNDS' && (
         <InlineBanner
@@ -104,7 +140,17 @@ const RightModels = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-lg font-semibold text-foreground">₹{cost.inr.toFixed(3)}</div>
+                {userCurrency === 'INR' || fxError === 'FX_UNAVAILABLE' ? (
+                  <div className="text-lg font-semibold text-foreground">₹{cost.inr.toFixed(3)}</div>
+                ) : (
+                  <div className="flex flex-col">
+                    <div className="text-lg font-semibold text-foreground">
+                      {userCurrency === 'USD' ? '$' : userCurrency === 'EUR' ? '€' : userCurrency + ' '}
+                      {convertFromINR(cost.inr, userCurrency).toFixed(3)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">≈ ₹{cost.inr.toFixed(3)}</div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>

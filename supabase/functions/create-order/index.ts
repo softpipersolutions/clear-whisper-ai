@@ -102,11 +102,21 @@ serve(async (req) => {
       throw new Error('Razorpay credentials not configured');
     }
 
-    // Create Razorpay order
+    // Create Razorpay order with receipt under 40 characters
+    const shortUserId = user.id.substring(0, 8); // First 8 chars of UUID
+    const shortTimestamp = Date.now().toString().slice(-8); // Last 8 digits of timestamp
+    const receipt = `rch_${shortUserId}_${shortTimestamp}`;
+    
+    // Validate receipt length (Razorpay limit is 40 characters)
+    if (receipt.length > 40) {
+      console.error(`Receipt too long: ${receipt.length} chars - ${receipt}`);
+      throw new Error('Receipt generation failed - length exceeded');
+    }
+    
     const razorpayOrderData = {
       amount: Math.round(amountINR * 100), // Convert to paise
       currency: 'INR',
-      receipt: `recharge_${user.id}_${Date.now()}`,
+      receipt: receipt,
       notes: {
         user_id: user.id,
         display_amount: amountInDisplay.toString(),

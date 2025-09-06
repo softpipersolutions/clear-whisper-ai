@@ -161,8 +161,34 @@ export const listChats = async (params: {
   if (params.cursor) queryParams.append('cursor', params.cursor);
   if (params.limit) queryParams.append('limit', params.limit.toString());
   
+  // Make direct GET request since chat-list expects GET, not POST
   const url = queryParams.toString() ? `chat-list?${queryParams}` : 'chat-list';
-  return callFunction<ChatListResponse>(url, undefined, 10000, signal);
+  
+  try {
+    const { data: auth } = await supabase.auth.getSession();
+    if (!auth.session) {
+      throw new Error('UNAUTHORIZED: Not signed in');
+    }
+
+    const response = await fetch(`https://dxxovxcdbdkyhokusnaz.supabase.co/functions/v1/${url}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${auth.session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Chat list error:', response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw normalizeError(error);
+  }
 };
 
 export const appendMessage = async (

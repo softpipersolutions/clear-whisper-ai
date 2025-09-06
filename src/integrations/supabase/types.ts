@@ -14,7 +14,117 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      fx_rates: {
+        Row: {
+          base: string
+          fetched_at: string
+          id: number
+          rates: Json
+        }
+        Insert: {
+          base?: string
+          fetched_at: string
+          id?: number
+          rates: Json
+        }
+        Update: {
+          base?: string
+          fetched_at?: string
+          id?: number
+          rates?: Json
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          country: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string | null
+          preferred_currency: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string | null
+          email?: string | null
+          id: string
+          name?: string | null
+          preferred_currency?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string | null
+          preferred_currency?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount_display: number
+          amount_inr: number
+          created_at: string | null
+          currency: string
+          deducted_cost_inr: number | null
+          id: string
+          raw_cost_inr: number | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount_display: number
+          amount_inr: number
+          created_at?: string | null
+          currency: string
+          deducted_cost_inr?: number | null
+          id?: string
+          raw_cost_inr?: number | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount_display?: number
+          amount_inr?: number
+          created_at?: string | null
+          currency?: string
+          deducted_cost_inr?: number | null
+          id?: string
+          raw_cost_inr?: number | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wallets: {
+        Row: {
+          balance_display: number
+          balance_inr: number
+          currency: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          balance_display?: number
+          balance_inr?: number
+          currency?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          balance_display?: number
+          balance_inr?: number
+          currency?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

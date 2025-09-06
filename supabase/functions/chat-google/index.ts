@@ -13,7 +13,7 @@ import { logOpsEvent } from "../_shared/hardening.ts";
 
 // Google Gemini supported models
 const GOOGLE_MODELS = [
-  'gemini-2.5-flash'
+  'models/gemini-2.5-flash'
 ];
 
 serve(async (req) => {

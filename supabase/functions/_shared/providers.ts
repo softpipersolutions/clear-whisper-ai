@@ -76,9 +76,9 @@ export function isHttpUnsupportedModel(model: string): boolean {
 }
 
 export function resolveProvider(model: string): 'openai' | 'anthropic' | 'google' | 'unknown' {
-  if (model.startsWith('gpt-')) return 'openai';
+  if (model.startsWith('gpt-') || model.startsWith('o1-') || model.startsWith('o3-') || model.startsWith('o4-')) return 'openai';
   if (model.startsWith('claude')) return 'anthropic';
-  if (model.startsWith('models/gemini')) return 'google';
+  if (model.startsWith('models/gemini') || model.startsWith('gemini')) return 'google';
   return 'unknown';
 }
 

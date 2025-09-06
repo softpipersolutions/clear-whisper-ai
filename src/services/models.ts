@@ -8,6 +8,20 @@ export interface ModelInfo {
 
 export const CATALOG: ModelInfo[] = [
   {
+    id: 'gpt-5-2025-08-07',
+    name: 'GPT-5',
+    badges: ['Flagship', 'Reasoning'],
+    latencyMs: 1000,
+    context: 200000
+  },
+  {
+    id: 'gpt-5-mini-2025-08-07',
+    name: 'GPT-5 Mini',
+    badges: ['Fast', 'Budget'],
+    latencyMs: 800,
+    context: 128000
+  },
+  {
     id: 'gpt-4o',
     name: 'GPT-4o',
     badges: ['Fast', 'Multimodal'],
@@ -15,32 +29,25 @@ export const CATALOG: ModelInfo[] = [
     context: 128000
   },
   {
-    id: 'claude-3-5-sonnet',
+    id: 'claude-3-5-sonnet-20241022',
     name: 'Claude 3.5 Sonnet',
     badges: ['Reasoning', 'Coding'],
     latencyMs: 1800,
     context: 200000
   },
   {
-    id: 'llama-3.1-405b',
-    name: 'Llama 3.1 405B',
-    badges: ['Open Source', 'Large'],
-    latencyMs: 2500,
-    context: 128000
+    id: 'claude-3-5-haiku-20241022',
+    name: 'Claude 3.5 Haiku',
+    badges: ['Fast', 'Budget'],
+    latencyMs: 1000,
+    context: 200000
   },
   {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
+    id: 'models/gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
     badges: ['Google', 'Multimodal'],
     latencyMs: 1500,
     context: 1000000
-  },
-  {
-    id: 'mistral-large',
-    name: 'Mistral Large',
-    badges: ['European', 'Fast'],
-    latencyMs: 1000,
-    context: 32000
   }
 ];
 

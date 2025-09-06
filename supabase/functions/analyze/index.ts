@@ -69,12 +69,12 @@ function generateRecommendations(tags: string[]): ModelRecommendation[] {
   
   if (tags.includes('code')) {
     recommended.push({
-      model: 'claude-3-5-sonnet',
+      model: 'claude-3-5-sonnet-20241022',
       why: 'Excellent for code generation and programming tasks',
       fitScore: 0.95
     });
     recommended.push({
-      model: 'gpt-4o',
+      model: 'gpt-5-2025-08-07',
       why: 'Strong coding capabilities and debugging',
       fitScore: 0.88
     });
@@ -82,12 +82,12 @@ function generateRecommendations(tags: string[]): ModelRecommendation[] {
   
   if (tags.includes('reasoning')) {
     recommended.push({
-      model: 'claude-3-5-sonnet',
+      model: 'claude-3-5-sonnet-20241022',
       why: 'Superior reasoning and complex analysis',
       fitScore: 0.92
     });
     recommended.push({
-      model: 'gemini-1.5-pro',
+      model: 'gpt-5-2025-08-07',
       why: 'Advanced reasoning capabilities',
       fitScore: 0.89
     });
@@ -95,7 +95,7 @@ function generateRecommendations(tags: string[]): ModelRecommendation[] {
   
   if (tags.includes('quick')) {
     recommended.push({
-      model: 'gpt-4o',
+      model: 'gpt-5-nano-2025-08-07',
       why: 'Fast and efficient for quick tasks',
       fitScore: 0.90
     });
@@ -116,9 +116,9 @@ function generateRecommendations(tags: string[]): ModelRecommendation[] {
   }, [] as ModelRecommendation[]);
   
   // Always include at least one fallback option
-  if (!uniqueRecommended.find(r => r.model === 'gpt-4o')) {
+  if (!uniqueRecommended.find(r => r.model === 'gpt-5-2025-08-07')) {
     uniqueRecommended.push({
-      model: 'gpt-4o',
+      model: 'gpt-5-2025-08-07',
       why: 'Versatile model for general tasks',
       fitScore: 0.80
     });

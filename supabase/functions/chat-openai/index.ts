@@ -13,10 +13,11 @@ import { logOpsEvent } from "../_shared/hardening.ts";
 
 // OpenAI supported models
 const OPENAI_MODELS = [
-  'gpt-5',
-  'gpt-5-mini',
-  'gpt-5-nano',
-  'gpt-realtime'
+  'gpt-5-2025-08-07',
+  'gpt-5-mini-2025-08-07',
+  'gpt-5-nano-2025-08-07',
+  'gpt-4o',
+  'gpt-4o-mini'
 ];
 
 serve(async (req) => {

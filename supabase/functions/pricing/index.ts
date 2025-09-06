@@ -28,12 +28,28 @@ serve(async (req) => {
       throw new Error('Method not allowed');
     }
 
-    // GPT-5 Nano pricing (mock data)
+    // Updated pricing with correct model names
     const pricing: PricingInfo[] = [
       {
-        model: 'gpt-5-nano',
+        model: 'gpt-5-nano-2025-08-07',
         inputPer1k: 0.001,
         outputPer1k: 0.002,
+        currency: 'INR',
+        lastUpdated: new Date().toISOString(),
+        provider: 'OpenAI'
+      },
+      {
+        model: 'gpt-5-mini-2025-08-07',
+        inputPer1k: 0.003,
+        outputPer1k: 0.012,
+        currency: 'INR',
+        lastUpdated: new Date().toISOString(),
+        provider: 'OpenAI'
+      },
+      {
+        model: 'gpt-5-2025-08-07',
+        inputPer1k: 0.015,
+        outputPer1k: 0.060,
         currency: 'INR',
         lastUpdated: new Date().toISOString(),
         provider: 'OpenAI'
@@ -47,9 +63,9 @@ serve(async (req) => {
         provider: 'OpenAI'
       },
       {
-        model: 'claude-3-5-sonnet',
-        inputPer1k: 0.003,
-        outputPer1k: 0.015,
+        model: 'claude-3-5-sonnet-20241022',
+        inputPer1k: 0.008,
+        outputPer1k: 0.024,
         currency: 'INR',
         lastUpdated: new Date().toISOString(),
         provider: 'Anthropic'
@@ -58,7 +74,7 @@ serve(async (req) => {
 
     const response = {
       pricing,
-      defaultModel: 'gpt-5-nano',
+      defaultModel: 'gpt-5-nano-2025-08-07',
       timestamp: new Date().toISOString()
     };
 

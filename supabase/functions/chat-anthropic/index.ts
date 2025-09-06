@@ -34,7 +34,10 @@ serve(async (req) => {
     console.log(`[${corrId}] Anthropic chat request started`);
 
     // Check if Anthropic API key is available
-    if (!isProviderAvailable('anthropic')) {
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+    console.log(`[${corrId}] Anthropic API key configured: ${!!anthropicKey}`);
+    if (!anthropicKey) {
+      console.error(`[${corrId}] Anthropic API key not found in environment`);
       throw new Error('NO_API_KEY: Anthropic API key not configured');
     }
 

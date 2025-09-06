@@ -32,7 +32,10 @@ serve(async (req) => {
     console.log(`[${corrId}] Google Gemini chat request started`);
 
     // Check if Google API key is available
-    if (!isProviderAvailable('google')) {
+    const googleKey = Deno.env.get('GOOGLE_API_KEY');
+    console.log(`[${corrId}] Google API key configured: ${!!googleKey}`);
+    if (!googleKey) {
+      console.error(`[${corrId}] Google API key not found in environment`);
       throw new Error('NO_API_KEY: Google API key not configured');
     }
 

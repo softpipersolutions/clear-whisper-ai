@@ -35,7 +35,10 @@ serve(async (req) => {
     console.log(`[${corrId}] OpenAI chat request started`);
 
     // Check if OpenAI API key is available
-    if (!isProviderAvailable('openai')) {
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    console.log(`[${corrId}] OpenAI API key configured: ${!!openaiKey}`);
+    if (!openaiKey) {
+      console.error(`[${corrId}] OpenAI API key not found in environment`);
       throw new Error('NO_API_KEY: OpenAI API key not configured');
     }
 

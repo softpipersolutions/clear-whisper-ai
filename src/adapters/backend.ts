@@ -207,11 +207,24 @@ export const postAnalyze = async (
 };
 
 // Helper function to determine provider from model
-const getProviderFromModel = (modelId: string): 'openai' | 'anthropic' | 'google' | 'unknown' => {
-  if (modelId.startsWith('gpt-')) return 'openai';
-  if (modelId.startsWith('claude')) return 'anthropic';
-  if (modelId.startsWith('gemini')) return 'google';
-  return 'unknown';
+const getProviderFromModel = (modelId: string): 'openai' | 'anthropic' | 'google' => {
+  console.log(`Determining provider for model: ${modelId}`);
+  
+  if (modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-') || modelId.startsWith('o4-')) {
+    console.log(`Model ${modelId} mapped to OpenAI`);
+    return 'openai';
+  }
+  if (modelId.startsWith('claude')) {
+    console.log(`Model ${modelId} mapped to Anthropic`);
+    return 'anthropic';
+  }
+  if (modelId.startsWith('gemini')) {
+    console.log(`Model ${modelId} mapped to Google`);
+    return 'google';
+  }
+  
+  console.error(`Unknown provider for model: ${modelId}`);
+  throw new Error(`Unknown provider for model: ${modelId}`);
 };
 
 export const postChatConfirm = async (data: {

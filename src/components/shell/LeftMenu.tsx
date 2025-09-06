@@ -4,7 +4,7 @@ import { useConversationsStore } from "@/store/conversations";
 import { useAuthStore } from "@/store/auth";
 import { useFxStore } from "@/store/fx";
 import ThemeToggle from "@/components/common/ThemeToggle";
-import { Plus, Wallet, RefreshCw, LogOut, User, MessageSquare, Archive } from "lucide-react";
+import { Plus, Wallet, RefreshCw, LogOut, User, MessageSquare, Archive, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -95,25 +95,43 @@ const LeftMenu = () => {
       {/* User Section */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center space-x-3 mb-3">
-          <div className="h-8 w-8 bg-secondary rounded-full flex items-center justify-center">
-            <User className="h-4 w-4 text-secondary-foreground" />
+          {/* User Avatar with Initials */}
+          <div className="h-10 w-10 bg-accent rounded-full flex items-center justify-center shadow-brand">
+            <span className="text-accent-foreground font-medium text-sm">
+              {user?.email?.charAt(0).toUpperCase() || 'U'}
+            </span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">
               {user?.email || 'User'}
             </p>
+            <p className="text-xs text-muted-foreground">
+              {userCurrency}
+            </p>
           </div>
         </div>
         
-        <Button
-          onClick={handleSignOut}
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start"
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Sign Out
-        </Button>
+        <div className="space-y-1">
+          <Button
+            onClick={() => navigate('/account')}
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start"
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Account Settings
+          </Button>
+          
+          <Button
+            onClick={handleSignOut}
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-muted-foreground hover:text-destructive"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign Out
+          </Button>
+        </div>
       </div>
 
       {/* Chat History */}

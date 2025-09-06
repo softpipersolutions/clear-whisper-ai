@@ -14,6 +14,7 @@ export interface AuthState {
   signInWithGoogle: () => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   initialize: () => void;
+  updateProfile: (metadata: Record<string, any>) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -115,5 +116,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Return cleanup function
     return () => subscription.unsubscribe();
+  },
+
+  updateProfile: (metadata: Record<string, any>) => {
+    const { user } = get();
+    if (user) {
+      set({
+        user: {
+          ...user,
+          user_metadata: {
+            ...user.user_metadata,
+            ...metadata
+          }
+        }
+      });
+    }
   },
 }));

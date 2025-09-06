@@ -8,6 +8,7 @@ import AuthGate from "./components/auth/AuthGate";
 import Index from "./pages/Index";
 import Chat from "./pages/Chat";
 import SignIn from "./pages/SignIn";
+import Account from "./pages/Account";
 import Recharge from "./pages/Recharge";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
@@ -32,6 +33,11 @@ const App = () => (
             <Route path="/chat" element={
               <AuthGate>
                 <Chat />
+              </AuthGate>
+            } />
+            <Route path="/account" element={
+              <AuthGate>
+                <Account />
               </AuthGate>
             } />
             <Route path="/recharge" element={

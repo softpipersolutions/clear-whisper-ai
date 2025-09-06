@@ -125,7 +125,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setEstimate: (cost, tags) => set({ cost, tags, phase: 'ready' }),
 
-  selectModel: (modelId) => set({ selectedModel: modelId }),
+  selectModel: (modelId) => set({ selectedModel: modelId, error: null }),
 
   startStream: async (userMessage, modelId) => {
     const { cost } = get();

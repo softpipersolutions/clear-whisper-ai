@@ -10,10 +10,11 @@ import { Skeleton, SkeletonCard, SkeletonText } from "@/components/common/Skelet
 import InlineBanner from "@/components/common/InlineBanner";
 import { IndianRupee, Clock, FileText, AlertCircle, Lock, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const RightModels = () => {
   const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation, query, startStream } = useChatStore();
+  const [isStartingChat, setIsStartingChat] = useState<string | null>(null);
   const { user } = useAuthStore();
   const { convertFromINR, fetchFxRate, isStale, rates, error: fxError } = useFxStore();
   const { models: allModels, pricing, fx, loading: modelsLoading, fetchModels, forceRefresh } = useModelsStore();
@@ -231,13 +232,22 @@ const RightModels = () => {
                       ? 'opacity-60 cursor-not-allowed shadow-brand'
                       : 'hover:bg-muted/30 shadow-brand hover:shadow-brand-hover'
                   }`}
-                  onClick={() => {
-                    if (model.locked) return;
-                    selectModel(model.id);
+                  onClick={async () => {
+                    if (model.locked || isStartingChat) return;
                     
-                    // Auto-start chat if user has typed a query and we're ready
-                    if (query.trim() && phase === 'ready') {
-                      startStream(query, model.id);
+                    try {
+                      // First select the model
+                      selectModel(model.id);
+                      
+                      // Auto-start chat if user has typed a query and we're ready
+                      if (query.trim() && phase === 'ready') {
+                        setIsStartingChat(model.id);
+                        await startStream(query, model.id);
+                      }
+                    } catch (error) {
+                      console.error('Error starting instant chat:', error);
+                    } finally {
+                      setIsStartingChat(null);
                     }
                   }}
                 >
@@ -245,6 +255,9 @@ const RightModels = () => {
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="font-medium text-sm text-foreground">{model.label}</h4>
                       <div className="flex items-center gap-1">
+                        {isStartingChat === model.id && (
+                          <div className="animate-spin h-3 w-3 border border-primary border-t-transparent rounded-full" />
+                        )}
                         {model.locked && (
                           <Badge variant="outline" className="text-xs border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:bg-amber-950">
                             <Lock size={8} className="mr-1" />

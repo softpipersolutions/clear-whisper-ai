@@ -9,27 +9,33 @@ All colors MUST be HSL.
 @layer base {
   :root {
     /* ClearChat Brand Colors - Light */
-    --background: 37 21 9;  /* #F9F7F4 */
-    --foreground: 8 7 6;    /* #1C1B1A */
+    --background: 0 0 98;   /* #FAFAFA - Better light mode contrast */
+    --foreground: 0 0 15;   /* #262626 - Better readability */
     --panel: 0 0 100;       /* #FFFFFF */
     
     --card: 0 0 100;        /* #FFFFFF */
-    --card-foreground: 8 7 6;
+    --card-foreground: 0 0 15;
 
     --popover: 0 0 100;
-    --popover-foreground: 8 7 6;
+    --popover-foreground: 0 0 15;
 
-    --primary: 8 7 6;       /* #1C1B1A */
+    --primary: 0 0 15;      /* #262626 - Better contrast */
     --primary-foreground: 0 0 100;
 
     --secondary: 21 11 65;  /* #F3B27B */
-    --secondary-foreground: 8 7 6;
+    --secondary-foreground: 0 0 15;
 
     --accent: 21 11 65;     /* #F3B27B */
-    --accent-foreground: 8 7 6;
+    --accent-foreground: 0 0 15;
 
-    --muted: 20 14 53;      /* #9B8B80 */
-    --muted-foreground: 8 7 6;
+    /* Neon Orange System */
+    --neon-orange: 22 100 60;     /* #FF6600 - Main neon orange */
+    --neon-orange-bright: 22 100 70; /* #FF7A1F - Brighter variant */
+    --neon-orange-light: 22 100 85;  /* #FFAD66 - Light variant */
+    --neon-orange-foreground: 0 0 100; /* White text on orange */
+
+    --muted: 0 0 60;        /* #999999 - Better light mode muted */
+    --muted-foreground: 0 0 40;
 
     --brown: 28 33 23;      /* #6B4F3B */
     --brown-foreground: 0 0 100;
@@ -37,15 +43,17 @@ All colors MUST be HSL.
     --destructive: 0 84 60;
     --destructive-foreground: 0 0 98;
 
-    --border: 20 14 85;
-    --input: 20 14 85;
-    --ring: 8 7 6;
+    --border: 0 0 90;       /* Better light mode borders */
+    --input: 0 0 95;        /* Better input backgrounds */
+    --ring: 22 100 60;      /* Use neon orange for focus rings */
 
     --radius: 1rem;
 
-    /* Brand shadows */
+    /* Enhanced shadows with neon orange */
     --shadow-brand: 0 4px 12px -2px hsl(var(--brown) / 0.1);
     --shadow-brand-hover: 0 8px 25px -5px hsl(var(--brown) / 0.25);
+    --shadow-neon: 0 4px 20px -4px hsl(var(--neon-orange) / 0.3);
+    --shadow-neon-hover: 0 8px 30px -6px hsl(var(--neon-orange) / 0.4);
 
     --sidebar-background: 0 0 98;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -78,6 +86,12 @@ All colors MUST be HSL.
     --accent: 21 15 71;      /* #F4B988 */
     --accent-foreground: 38 20 6;
 
+    /* Neon Orange System - Dark Mode */
+    --neon-orange: 22 100 65;     /* #FF7519 - Slightly brighter for dark */
+    --neon-orange-bright: 22 100 75; /* #FF8C42 - Extra bright */
+    --neon-orange-light: 22 100 85;  /* #FFAD66 - Light variant */
+    --neon-orange-foreground: 0 0 5; /* Near black text on orange */
+
     --muted: 22 19 73;       /* #B7A79C */
     --muted-foreground: 46 30 91;
 
@@ -89,7 +103,7 @@ All colors MUST be HSL.
 
     --border: 40 18 20;
     --input: 40 18 20;
-    --ring: 46 30 84;
+    --ring: 22 100 65;       /* Use neon orange for focus rings */
 
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;

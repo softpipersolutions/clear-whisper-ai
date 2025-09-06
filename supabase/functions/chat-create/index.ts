@@ -65,9 +65,25 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { title = 'Untitled chat' }: CreateChatRequest = await req.json();
+    const { title }: CreateChatRequest = await req.json();
 
-    if (typeof title !== 'string' || title.length > 500) {
+    // Generate auto title if not provided
+    let chatTitle = 'New Chat';
+    if (title && typeof title === 'string' && title.trim()) {
+      // If title provided, use it
+      chatTitle = title.trim();
+    } else {
+      // Generate a timestamped title
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
+      chatTitle = `Chat at ${timeStr}`;
+    }
+
+    if (chatTitle.length > 500) {
       return new Response(JSON.stringify({ error: 'BAD_INPUT' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -79,7 +95,7 @@ serve(async (req) => {
       .from('chats')
       .insert({
         user_id: user.id,
-        title: title.trim() || 'Untitled chat'
+        title: chatTitle
       })
       .select('id, title, created_at')
       .single();

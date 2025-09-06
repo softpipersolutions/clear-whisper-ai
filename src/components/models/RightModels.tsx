@@ -11,6 +11,7 @@ import InlineBanner from "@/components/common/InlineBanner";
 import { IndianRupee, Clock, FileText, AlertCircle, Lock, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
+import { ModelCostDisplay } from "./ModelCostDisplay";
 
 const RightModels = () => {
   const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation, query, startStream } = useChatStore();
@@ -270,9 +271,9 @@ const RightModels = () => {
                             Audio
                           </Badge>
                         )}
-                        {selectedModel === model.id && (
-                          <Badge className="text-xs bg-accent text-accent-foreground shadow-sm">Selected</Badge>
-                        )}
+                         {selectedModel === model.id && (
+                           <Badge className="text-xs bg-neon-orange text-neon-orange-foreground shadow-neon animate-pulse-glow">Selected</Badge>
+                         )}
                       </div>
                     </div>
                     
@@ -284,21 +285,31 @@ const RightModels = () => {
                       ))}
                     </div>
                     
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono">{model.family}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="capitalize">{model.provider}</span>
-                      </div>
-                      {pricing.rates[model.id] && (
-                        <div className="flex items-center gap-1">
-                          <IndianRupee size={8} />
-                          {pricing.currency === 'INR' ? '₹' : '$'}
-                          {pricing.rates[model.id].inputPer1M.toFixed(2)}/1M
-                        </div>
-                      )}
-                    </div>
+                     <div className="flex flex-col gap-2">
+                       <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                         <div className="flex items-center gap-1">
+                           <span className="font-mono">{model.family}</span>
+                         </div>
+                         <div className="flex items-center gap-1">
+                           <span className="capitalize">{model.provider}</span>
+                         </div>
+                         {pricing.rates[model.id] && (
+                           <div className="flex items-center gap-1">
+                             <IndianRupee size={8} />
+                             {pricing.currency === 'INR' ? '₹' : '$'}
+                             {pricing.rates[model.id].inputPer1M.toFixed(2)}/1M
+                           </div>
+                         )}
+                       </div>
+                       
+                       {/* Exact cost for current query */}
+                       {cost && (
+                         <ModelCostDisplay 
+                           model={model} 
+                           className="text-xs"
+                         />
+                       )}
+                     </div>
                   </CardContent>
                 </Card>
               </motion.div>

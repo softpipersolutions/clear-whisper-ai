@@ -29,6 +29,12 @@ export default {
 					DEFAULT: 'hsl(var(--brown))',
 					foreground: 'hsl(var(--brown-foreground))'
 				},
+				'neon-orange': {
+					DEFAULT: 'hsl(var(--neon-orange))',
+					bright: 'hsl(var(--neon-orange-bright))',
+					light: 'hsl(var(--neon-orange-light))',
+					foreground: 'hsl(var(--neon-orange-foreground))'
+				},
 				primary: {
 					DEFAULT: 'hsl(var(--primary))',
 					foreground: 'hsl(var(--primary-foreground))'
@@ -70,7 +76,9 @@ export default {
 			},
 			boxShadow: {
 				'brand': 'var(--shadow-brand)',
-				'brand-hover': 'var(--shadow-brand-hover)'
+				'brand-hover': 'var(--shadow-brand-hover)',
+				'neon': 'var(--shadow-neon)',
+				'neon-hover': 'var(--shadow-neon-hover)'
 			},
 			backdropBlur: {
 				'brand': '20px'
@@ -104,13 +112,40 @@ export default {
 				'cursor-blink': {
 					'0%, 50%': { opacity: '1' },
 					'51%, 100%': { opacity: '0' }
+				},
+				'typing-dots': {
+					'0%, 60%, 100%': { transform: 'translateY(0)' },
+					'30%': { transform: 'translateY(-10px)' }
+				},
+				'pulse-glow': {
+					'0%, 100%': { 
+						opacity: '1',
+						boxShadow: '0 0 20px hsl(var(--neon-orange) / 0.3)'
+					},
+					'50%': { 
+						opacity: '0.8',
+						boxShadow: '0 0 30px hsl(var(--neon-orange) / 0.5)'
+					}
+				},
+				'fade-in-up': {
+					'0%': {
+						opacity: '0',
+						transform: 'translateY(20px)'
+					},
+					'100%': {
+						opacity: '1',
+						transform: 'translateY(0)'
+					}
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
 				shimmer: 'shimmer 1.2s ease-in-out infinite',
-				'cursor-blink': 'cursor-blink 1s ease-in-out infinite'
+				'cursor-blink': 'cursor-blink 1s ease-in-out infinite',
+				'typing-dots': 'typing-dots 1.4s ease-in-out infinite',
+				'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+				'fade-in-up': 'fade-in-up 0.5s ease-out'
 			}
 		}
 	},

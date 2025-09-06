@@ -6,6 +6,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import VisuallyHidden from "@/components/common/VisuallyHidden";
+import { LoadingAnimation } from "./LoadingAnimation";
+import { MessageCostDisplay } from "./MessageCostDisplay";
 
 const TypewriterText = ({ text, isComplete }: { text: string; isComplete: boolean }) => {
   const [displayText, setDisplayText] = useState('');
@@ -202,13 +204,13 @@ const Transcript = () => {
                     <div className="text-sm text-foreground whitespace-pre-wrap">
                       {message.content}
                     </div>
-                    {(message.tokensIn > 0 || message.tokensOut > 0) && (
-                      <div className="text-xs text-muted-foreground mt-1" aria-label="Token usage">
-                        {message.tokensIn > 0 && `${message.tokensIn} tokens in`}
-                        {message.tokensIn > 0 && message.tokensOut > 0 && ' • '}
-                        {message.tokensOut > 0 && `${message.tokensOut} tokens out`}
-                      </div>
-                    )}
+                     {(message.tokensIn > 0 || message.tokensOut > 0) && (
+                       <div className="text-xs text-muted-foreground mt-1" aria-label="Token usage">
+                         {message.tokensIn > 0 && `${message.tokensIn} tokens in`}
+                         {message.tokensIn > 0 && message.tokensOut > 0 && ' • '}
+                         {message.tokensOut > 0 && `${message.tokensOut} tokens out`}
+                       </div>
+                     )}
                   </div>
                 </motion.div>
               ))}
@@ -238,6 +240,11 @@ const Transcript = () => {
                     </div>
                   </div>
                 </motion.div>
+              )}
+
+              {/* Loading state when waiting for response */}
+              {phase === 'executing' && !isStreaming && !streamingMessage && (
+                <LoadingAnimation message="AI is thinking..." />
               )}
             </AnimatePresence>
           </div>

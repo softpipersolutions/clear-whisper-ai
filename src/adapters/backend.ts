@@ -246,13 +246,16 @@ export const postChatConfirm = async (data: {
   // Route to provider-specific edge function
   const provider = getProviderFromModel(data.model);
   
+  // Use longer timeout for chat requests (60 seconds)
+  const chatTimeout = 60000;
+  
   switch (provider) {
     case 'openai':
-      return callFunction<ChatConfirmResponse>('chat-openai', data);
+      return callFunction<ChatConfirmResponse>('chat-openai', data, chatTimeout);
     case 'anthropic':
-      return callFunction<ChatConfirmResponse>('chat-anthropic', data);
+      return callFunction<ChatConfirmResponse>('chat-anthropic', data, chatTimeout);
     case 'google':
-      return callFunction<ChatConfirmResponse>('chat-google', data);
+      return callFunction<ChatConfirmResponse>('chat-google', data, chatTimeout);
     default:
       throw new Error(`Unsupported model provider for model: ${data.model}`);
   }

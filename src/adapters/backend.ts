@@ -40,6 +40,19 @@ export interface WalletResponse {
   updated_at: string;
 }
 
+export interface CreateOrderRequest {
+  amountInDisplay: number;
+  currency: string;
+}
+
+export interface CreateOrderResponse {
+  order_id: string;
+  amount_inr: number;
+  currency: string;
+  display_amount: number;
+  display_currency: string;
+}
+
 export interface FxResponse {
   rate: number;
   lastUpdated: string;
@@ -159,4 +172,8 @@ export const getFx = async (to: string = 'USD'): Promise<FxResponse> => {
 
 export const getWallet = async (): Promise<WalletResponse> => {
   return callFunction<WalletResponse>('get-wallet');
+};
+
+export const createOrder = async (data: CreateOrderRequest): Promise<CreateOrderResponse> => {
+  return callFunction<CreateOrderResponse>('create-order', data);
 };

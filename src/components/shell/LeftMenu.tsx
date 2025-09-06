@@ -48,7 +48,7 @@ const LeftMenu = () => {
 
       {/* Wallet */}
       <div className="sticky bottom-0 p-4 border-t border-border bg-panel/80 backdrop-blur-brand">
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-sm mb-2">
           <div className="flex items-center gap-2">
             <Wallet size={16} className="text-brown" />
             <span className="text-muted-foreground">Wallet:</span>
@@ -68,6 +68,16 @@ const LeftMenu = () => {
             <RefreshCw size={12} className={isLoadingWallet ? "animate-spin" : ""} />
           </Button>
         </div>
+        
+        <Button
+          onClick={() => window.location.href = '/recharge'}
+          variant="outline"
+          size="sm"
+          className="w-full h-8 text-xs"
+        >
+          <Plus size={12} className="mr-1" />
+          Add Money
+        </Button>
       </div>
     </div>
   );

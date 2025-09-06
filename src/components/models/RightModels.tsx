@@ -1,13 +1,14 @@
 import { useChatStore } from "@/store/chat";
 import { useAuthStore } from "@/store/auth";
 import { useFxStore } from "@/store/fx";
-import { filterByTags } from "@/services/models";
+import { useModelsStore } from "@/store/models";
+import { filterByTags } from "@/adapters/models";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton, SkeletonCard, SkeletonText } from "@/components/common/Skeleton";
 import InlineBanner from "@/components/common/InlineBanner";
-import { IndianRupee, Clock, FileText, AlertCircle } from "lucide-react";
+import { IndianRupee, Clock, FileText, AlertCircle, Lock, Volume2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect } from "react";
 
@@ -15,9 +16,15 @@ const RightModels = () => {
   const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation } = useChatStore();
   const { user } = useAuthStore();
   const { convertFromINR, fetchFxRate, isStale, rates, error: fxError } = useFxStore();
+  const { models: allModels, pricing, fx, loading: modelsLoading, fetchModels } = useModelsStore();
   
   // Get user's preferred currency
   const userCurrency = user?.user_metadata?.preferred_currency || 'INR';
+  
+  // Fetch models and FX rate when component mounts
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
   
   // Fetch FX rate when component mounts or currency changes
   useEffect(() => {
@@ -26,7 +33,7 @@ const RightModels = () => {
     }
   }, [userCurrency, cost, fetchFxRate]);
 
-  const models = filterByTags(tags);
+  const models = filterByTags(allModels, tags);
 
   if (phase === 'estimating') {
     return (
@@ -212,35 +219,56 @@ const RightModels = () => {
                   className={`cursor-pointer transition-all duration-200 rounded-2xl ${
                     selectedModel === model.id 
                       ? 'ring-2 ring-accent bg-accent/5 shadow-brand-hover' 
+                      : model.locked
+                      ? 'opacity-60 cursor-not-allowed shadow-brand'
                       : 'hover:bg-muted/30 shadow-brand hover:shadow-brand-hover'
                   }`}
-                  onClick={() => selectModel(model.id)}
+                  onClick={() => !model.locked && selectModel(model.id)}
                 >
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-medium text-sm text-foreground">{model.name}</h4>
-                      {selectedModel === model.id && (
-                        <Badge className="text-xs bg-accent text-accent-foreground shadow-sm">Selected</Badge>
-                      )}
+                      <h4 className="font-medium text-sm text-foreground">{model.label}</h4>
+                      <div className="flex items-center gap-1">
+                        {model.locked && (
+                          <Badge variant="outline" className="text-xs border-amber-200 text-amber-700 bg-amber-50">
+                            <Lock size={8} className="mr-1" />
+                            Locked
+                          </Badge>
+                        )}
+                        {model.pricingUSD.unit === 'audioTokens' && (
+                          <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">
+                            <Volume2 size={8} className="mr-1" />
+                            Audio
+                          </Badge>
+                        )}
+                        {selectedModel === model.id && (
+                          <Badge className="text-xs bg-accent text-accent-foreground shadow-sm">Selected</Badge>
+                        )}
+                      </div>
                     </div>
                     
                     <div className="flex flex-wrap gap-1 mb-2">
-                      {model.badges.map((badge) => (
-                        <Badge key={badge} variant="outline" className="text-xs border-border">
-                          {badge}
+                      {model.tags.map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-xs border-border">
+                          {tag}
                         </Badge>
                       ))}
                     </div>
                     
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
-                        <Clock size={10} />
-                        {model.latencyMs}ms
+                        <span className="font-mono">{model.family}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <FileText size={10} />
-                        {(model.context / 1000).toFixed(0)}k
+                        <span className="capitalize">{model.provider}</span>
                       </div>
+                      {pricing.rates[model.id] && (
+                        <div className="flex items-center gap-1">
+                          <IndianRupee size={8} />
+                          {pricing.currency === 'INR' ? '₹' : '$'}
+                          {pricing.rates[model.id].inputPer1M.toFixed(2)}/1M
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

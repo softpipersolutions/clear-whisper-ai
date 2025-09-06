@@ -8,6 +8,7 @@ import {
   checkIdempotency,
   hashIdempotencyKey 
 } from "../_shared/hardening.ts";
+import { isSupportedModel } from "../_shared/catalog.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -84,6 +85,11 @@ serve(async (req) => {
     
     if (!message || !model || typeof estCostINR !== 'number') {
       throw new Error('BAD_INPUT: Missing required fields: message, model, estCostINR');
+    }
+
+    // Validate model
+    if (!isSupportedModel(model)) {
+      throw new Error('BAD_INPUT: Unsupported model');
     }
 
     console.log(`[${corrId}] Processing chat confirm for user: ${userId}, model: ${model}, cost: ₹${estCostINR}`);

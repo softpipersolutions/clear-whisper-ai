@@ -1,74 +1,40 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getModelCatalog, ModelInfo } from "../_shared/catalog.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface ModelInfo {
-  id: string;
-  name: string;
-  badges: string[];
-  latencyMs: number;
-  context: number;
-  provider: string;
-  costPer1kInput: number;
-  costPer1kOutput: number;
+interface FxResponse {
+  base: string;
+  rates: Record<string, number>;
+  fetchedAt: string;
+  stale?: boolean;
+  error?: string;
 }
 
-const MODELS_CATALOG: ModelInfo[] = [
-  {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    badges: ['Fast', 'Multimodal'],
-    latencyMs: 1200,
-    context: 128000,
-    provider: 'OpenAI',
-    costPer1kInput: 0.005,
-    costPer1kOutput: 0.015
-  },
-  {
-    id: 'claude-3-5-sonnet',
-    name: 'Claude 3.5 Sonnet',
-    badges: ['Reasoning', 'Coding'],
-    latencyMs: 1800,
-    context: 200000,
-    provider: 'Anthropic',
-    costPer1kInput: 0.003,
-    costPer1kOutput: 0.015
-  },
-  {
-    id: 'llama-3.1-405b',
-    name: 'Llama 3.1 405B',
-    badges: ['Open Source', 'Large'],
-    latencyMs: 2500,
-    context: 128000,
-    provider: 'Meta',
-    costPer1kInput: 0.001,
-    costPer1kOutput: 0.002
-  },
-  {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
-    badges: ['Google', 'Multimodal'],
-    latencyMs: 1500,
-    context: 1000000,
-    provider: 'Google',
-    costPer1kInput: 0.0035,
-    costPer1kOutput: 0.0105
-  },
-  {
-    id: 'mistral-large',
-    name: 'Mistral Large',
-    badges: ['European', 'Fast'],
-    latencyMs: 1000,
-    context: 32000,
-    provider: 'Mistral',
-    costPer1kInput: 0.004,
-    costPer1kOutput: 0.012
-  }
-];
+interface ModelPricingResponse {
+  inputPer1M: number;
+  outputPer1M: number;
+  cachedInputPer1M?: number;
+  unit?: 'tokens' | 'audioTokens';
+}
+
+interface ModelsResponse {
+  models: ModelInfo[];
+  pricing: {
+    currency: 'USD' | 'INR';
+    rates: Record<string, ModelPricingResponse>;
+  };
+  fx?: {
+    usdToInr: number;
+    fetchedAt: string;
+    stale: boolean;
+  };
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -83,16 +49,81 @@ serve(async (req) => {
       throw new Error('Method not allowed');
     }
 
-    const response = {
-      models: MODELS_CATALOG,
-      lastUpdated: new Date().toISOString(),
-      count: MODELS_CATALOG.length
+    // Get model catalog with lock status
+    const models = getModelCatalog();
+    
+    // Create Supabase client for FX lookup
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Fetch FX rate (USD to INR)
+    let fxData: { usdToInr: number; fetchedAt: string; stale: boolean } | undefined;
+    
+    try {
+      const { data: fxResponse, error: fxError } = await supabaseClient.functions.invoke('fx', {
+        body: { to: 'USD' }
+      });
+
+      if (!fxError && fxResponse && fxResponse.rates?.USD) {
+        // Convert INR->USD to USD->INR
+        const usdToInr = 1 / fxResponse.rates.USD;
+        fxData = {
+          usdToInr,
+          fetchedAt: fxResponse.fetchedAt,
+          stale: fxResponse.stale || false
+        };
+      }
+    } catch (error) {
+      console.warn('FX lookup failed:', error);
+    }
+
+    // Build pricing map
+    const usdRates: Record<string, ModelPricingResponse> = {};
+    const inrRates: Record<string, ModelPricingResponse> = {};
+
+    models.forEach(model => {
+      const { pricingUSD } = model;
+      
+      // USD rates
+      usdRates[model.id] = {
+        inputPer1M: pricingUSD.inputPer1M,
+        outputPer1M: pricingUSD.outputPer1M,
+        ...(pricingUSD.cachedInputPer1M && { cachedInputPer1M: pricingUSD.cachedInputPer1M }),
+        ...(pricingUSD.unit && { unit: pricingUSD.unit })
+      };
+
+      // INR rates (if FX available)
+      if (fxData) {
+        inrRates[model.id] = {
+          inputPer1M: pricingUSD.inputPer1M * fxData.usdToInr,
+          outputPer1M: pricingUSD.outputPer1M * fxData.usdToInr,
+          ...(pricingUSD.cachedInputPer1M && { 
+            cachedInputPer1M: pricingUSD.cachedInputPer1M * fxData.usdToInr 
+          }),
+          ...(pricingUSD.unit && { unit: pricingUSD.unit })
+        };
+      }
+    });
+
+    const response: ModelsResponse = {
+      models,
+      pricing: {
+        currency: fxData ? 'INR' : 'USD',
+        rates: fxData ? inrRates : usdRates
+      },
+      ...(fxData && { fx: fxData })
     };
 
-    console.log(`Returning ${MODELS_CATALOG.length} models`);
+    console.log(`Returning ${models.length} models with pricing in ${response.pricing.currency}`);
 
     return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=300' // 5 minutes cache
+      },
     });
   } catch (error) {
     console.error('Error in models function:', error);

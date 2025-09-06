@@ -22,10 +22,24 @@ export const CATALOG: ModelInfo[] = [
     context: 128000
   },
   {
+    id: 'gpt-5-nano-2025-08-07',
+    name: 'GPT-5 Nano',
+    badges: ['Ultra Fast', 'Ultra Budget'],
+    latencyMs: 600,
+    context: 128000
+  },
+  {
     id: 'gpt-4o',
     name: 'GPT-4o',
     badges: ['Fast', 'Multimodal'],
     latencyMs: 1200,
+    context: 128000
+  },
+  {
+    id: 'gpt-4o-mini',
+    name: 'GPT-4o Mini',
+    badges: ['Fast', 'Budget'],
+    latencyMs: 800,
     context: 128000
   },
   {

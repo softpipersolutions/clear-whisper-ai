@@ -32,7 +32,7 @@ export const getProviderAvailability = () => {
 const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
   // OPENAI (API) - Using correct API model names
   {
-    id: 'gpt-5',
+    id: 'gpt-5-2025-08-07',
     provider: 'openai',
     label: 'GPT-5',
     model: 'gpt-5-2025-08-07',
@@ -46,7 +46,7 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
     }
   },
   {
-    id: 'gpt-5-mini',
+    id: 'gpt-5-mini-2025-08-07',
     provider: 'openai',
     label: 'GPT-5 Mini',
     model: 'gpt-5-mini-2025-08-07',
@@ -60,7 +60,7 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
     }
   },
   {
-    id: 'gpt-5-nano',
+    id: 'gpt-5-nano-2025-08-07',
     provider: 'openai',
     label: 'GPT-5 Nano',
     model: 'gpt-5-nano-2025-08-07',
@@ -104,7 +104,7 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
 
   // ANTHROPIC (Claude API) - Using correct API model names
   {
-    id: 'claude-3.5-sonnet',
+    id: 'claude-3-5-sonnet-20241022',
     provider: 'anthropic',
     label: 'Claude 3.5 Sonnet',
     model: 'claude-3-5-sonnet-20241022',
@@ -118,7 +118,7 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
     }
   },
   {
-    id: 'claude-3.5-haiku',
+    id: 'claude-3-5-haiku-20241022',
     provider: 'anthropic',
     label: 'Claude 3.5 Haiku',
     model: 'claude-3-5-haiku-20241022',
@@ -134,7 +134,7 @@ const BASE_MODEL_CATALOG: Omit<ModelInfo, 'locked'>[] = [
 
   // GOOGLE GEMINI (Gemini API)
   {
-    id: 'gemini-2.5-flash',
+    id: 'models/gemini-2.5-flash',
     provider: 'google',
     label: 'Gemini 2.5 Flash',
     model: 'models/gemini-2.5-flash',

@@ -100,7 +100,7 @@ function generateRecommendations(tags: string[]): ModelRecommendation[] {
       fitScore: 0.90
     });
     recommended.push({
-      model: 'mistral-large',
+      model: 'gpt-5-mini-2025-08-07',
       why: 'Quick responses with good quality',
       fitScore: 0.85
     });

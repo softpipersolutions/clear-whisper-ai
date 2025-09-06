@@ -125,12 +125,12 @@ serve(async (req) => {
         console.log(`[${corrId}] Wallet credited successfully. New balance: ₹${newBalance}`);
       }
 
-      // Log credit transaction
+      // Log recharge transaction
       const { error: transactionError } = await supabaseClient
         .from('transactions')
         .insert({
           user_id: userId,
-          type: 'credit',
+          type: 'recharge',
           amount_inr: amountPaid,
           amount_display: amountPaid,
           currency: 'INR'

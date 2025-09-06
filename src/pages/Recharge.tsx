@@ -102,11 +102,28 @@ const RechargePage = () => {
             description: "Your payment is being processed. Your wallet will be updated shortly.",
           });
 
-          // Poll for wallet update
-          setTimeout(() => {
-            loadWallet();
-            setIsWaitingForConfirmation(false);
-          }, 3000);
+          // Poll for wallet update with retry logic
+          let retryCount = 0;
+          const maxRetries = 3;
+          const checkWalletUpdate = async () => {
+            try {
+              await loadWallet();
+              setIsWaitingForConfirmation(false);
+            } catch (error) {
+              retryCount++;
+              if (retryCount < maxRetries) {
+                setTimeout(checkWalletUpdate, 2000);
+              } else {
+                setIsWaitingForConfirmation(false);
+                toast({
+                  title: "Wallet Update Delayed",
+                  description: "Payment successful, but wallet update is taking longer than expected. Please refresh the page.",
+                });
+              }
+            }
+          };
+          
+          setTimeout(checkWalletUpdate, 5000);
         },
         prefill: {
           name: 'ClearChat User',
@@ -183,7 +200,17 @@ const RechargePage = () => {
           <Card className="bg-gradient-to-r from-accent/10 to-brown/10 border-accent/20">
             <CardContent className="p-4">
               <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-1">Current Balance</p>
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <p className="text-sm text-muted-foreground">Current Balance</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => loadWallet()}
+                    className="h-6 w-6 p-0"
+                  >
+                    <RefreshCw size={12} />
+                  </Button>
+                </div>
                 <p className="text-3xl font-bold text-foreground">₹{wallet.inr.toFixed(2)}</p>
               </div>
             </CardContent>

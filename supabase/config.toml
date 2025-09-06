@@ -5,3 +5,12 @@ verify_jwt = false
 
 [functions.razorpay-config]
 verify_jwt = true
+
+[functions.chat-openai]
+verify_jwt = true
+
+[functions.chat-anthropic]
+verify_jwt = true
+
+[functions.chat-google]
+verify_jwt = true

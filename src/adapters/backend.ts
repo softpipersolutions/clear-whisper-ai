@@ -206,12 +206,32 @@ export const postAnalyze = async (
   return callFunction<AnalyzeResponse>('analyze', { message, history });
 };
 
+// Helper function to determine provider from model
+const getProviderFromModel = (modelId: string): 'openai' | 'anthropic' | 'google' | 'unknown' => {
+  if (modelId.startsWith('gpt-')) return 'openai';
+  if (modelId.startsWith('claude')) return 'anthropic';
+  if (modelId.startsWith('gemini')) return 'google';
+  return 'unknown';
+};
+
 export const postChatConfirm = async (data: {
   message: string;
   model: string;
   estCostINR: number;
 }): Promise<ChatConfirmResponse> => {
-  return callFunction<ChatConfirmResponse>('chat-confirm', data);
+  // Route to provider-specific edge function
+  const provider = getProviderFromModel(data.model);
+  
+  switch (provider) {
+    case 'openai':
+      return callFunction<ChatConfirmResponse>('chat-openai', data);
+    case 'anthropic':
+      return callFunction<ChatConfirmResponse>('chat-anthropic', data);
+    case 'google':
+      return callFunction<ChatConfirmResponse>('chat-google', data);
+    default:
+      throw new Error(`Unsupported model provider for model: ${data.model}`);
+  }
 };
 
 export const getFx = async (to: string = 'USD'): Promise<FxResponse> => {

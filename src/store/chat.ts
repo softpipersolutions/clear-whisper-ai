@@ -30,6 +30,7 @@ export interface ChatState {
   reset: () => void;
   addMessage: (message: Message) => void;
   updateLastMessage: (text: string) => void;
+  retryLastOperation: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -54,22 +55,55 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ phase: 'estimating', error: null });
 
     try {
-      // Import services dynamically to avoid circular dependencies
-      const { estimateTokens, estimateCostINR, inferTags } = await import('../services/estimators');
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 400));
-      
-      const tokens = estimateTokens(query);
-      const costINR = estimateCostINR(tokens);
-      const tags = inferTags(query);
-      
-      set({
-        cost: { display: costINR, inr: costINR },
-        tags,
-        phase: 'ready'
-      });
+      // Import backend adapter and mock services
+      const [backendAdapter, mockServices] = await Promise.all([
+        import('../adapters/backend'),
+        import('../services/estimators')
+      ]);
+
+      // Try backend calls first, fall back to mocks on error
+      try {
+        console.log('Calling backend services...');
+        
+        // Convert messages to history format for backend
+        const { messages } = get();
+        const history = messages.map(msg => ({
+          role: msg.role,
+          content: msg.text
+        }));
+
+        // Call backend services in parallel with timeout
+        const [estimateResult, analyzeResult] = await Promise.all([
+          backendAdapter.postEstimate(query, history),
+          backendAdapter.postAnalyze(query, history)
+        ]);
+
+        console.log('Backend response:', { estimateResult, analyzeResult });
+        
+        set({
+          cost: { 
+            display: estimateResult.estCostDisplay, 
+            inr: estimateResult.estCostINR 
+          },
+          tags: analyzeResult.tags,
+          phase: 'ready'
+        });
+      } catch (backendError) {
+        console.warn('Backend call failed, falling back to mocks:', backendError);
+        
+        // Fallback to mock services
+        const tokens = mockServices.estimateTokens(query);
+        const costINR = mockServices.estimateCostINR(tokens);
+        const tags = mockServices.inferTags(query);
+        
+        set({
+          cost: { display: costINR, inr: costINR },
+          tags,
+          phase: 'ready'
+        });
+      }
     } catch (error) {
+      console.error('All estimation methods failed:', error);
       set({ 
         error: error instanceof Error ? error.message : 'Estimation failed',
         phase: 'idle'
@@ -82,6 +116,38 @@ export const useChatStore = create<ChatState>((set, get) => ({
   selectModel: (modelId) => set({ selectedModel: modelId }),
 
   startStream: async (userMessage, modelId) => {
+    const { cost } = get();
+    if (!cost) {
+      set({ error: 'No cost estimate available' });
+      return;
+    }
+
+    // First, confirm the chat with backend
+    try {
+      const backendAdapter = await import('../adapters/backend');
+      const confirmResult = await backendAdapter.postChatConfirm({
+        message: userMessage,
+        model: modelId,
+        estCostINR: cost.inr
+      });
+
+      if (!confirmResult.ok) {
+        if (confirmResult.error === 'INSUFFICIENT_FUNDS') {
+          set({ error: 'INSUFFICIENT_FUNDS' });
+          return;
+        }
+        throw new Error(confirmResult.error || 'Chat confirmation failed');
+      }
+
+      // Update wallet balance if provided
+      if (confirmResult.newBalanceINR !== undefined) {
+        set({ wallet: { inr: confirmResult.newBalanceINR } });
+      }
+    } catch (backendError) {
+      console.warn('Backend confirmation failed, proceeding with mock:', backendError);
+      // Continue with mock streaming - don't block on backend errors for now
+    }
+
     const controller = new AbortController();
     set({ 
       streamController: controller,
@@ -161,5 +227,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
       set({ messages: updatedMessages });
     }
+  },
+
+  retryLastOperation: () => {
+    const { submitQuery } = get();
+    submitQuery();
   }
 }));

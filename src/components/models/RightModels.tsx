@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton, SkeletonCard, SkeletonText } from "@/components/common/Skeleton";
+import InlineBanner from "@/components/common/InlineBanner";
 import { IndianRupee, Clock, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const RightModels = () => {
-  const { phase, cost, tags, selectedModel, selectModel } = useChatStore();
+  const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation } = useChatStore();
 
   const models = filterByTags(tags);
 
@@ -62,7 +63,27 @@ const RightModels = () => {
   }
 
   return (
-    <div className="p-4 space-y-4">{/* Cost Preview */}
+    <div className="p-4 space-y-4">
+      {/* Error Banner */}
+      {error && error !== 'INSUFFICIENT_FUNDS' && (
+        <InlineBanner
+          type="error"
+          title="Connection Error"
+          message="Failed to load data from server. Using cached information."
+          onRetry={retryLastOperation}
+          onDismiss={() => {/* Could add dismiss functionality */}}
+        />
+      )}
+      
+      {error === 'INSUFFICIENT_FUNDS' && (
+        <InlineBanner
+          type="error"
+          title="Insufficient Funds"
+          message="Please add credits to your wallet to continue."
+        />
+      )}
+
+      {/* Cost Preview */}
       <AnimatePresence>
         {cost && (
           <motion.div

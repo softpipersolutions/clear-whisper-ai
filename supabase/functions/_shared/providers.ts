@@ -1,132 +1,350 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { callGemini, ProviderError } from "../_shared/providers.ts";
-import { corsHeaders, setupChatRequest, processCommonValidation, rollbackWallet, createSuccessResponse, createErrorResponse } from "../_shared/chat-common.ts";
-import { logOpsEvent } from "../_shared/hardening.ts";
+// supabase/functions/_shared/providers.ts
+// Unified provider adapters for OpenAI, Anthropic, Google Gemini.
+// All calls are SERVER-SIDE ONLY. Never expose keys client-side.
 
-// Google Gemini supported models
-const GOOGLE_MODELS = [
-  'gemini-1.5-pro',
-  'gemini-1.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.5-flash'
-];
+type Role = 'user' | 'assistant' | 'system';
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: corsHeaders
-    });
+export type ChatArgs = {
+  model: string;
+  messages: Array<{ role: Role; content: string }>;
+  temperature?: number;
+  max_tokens?: number;
+};
+
+export type ChatOut = {
+  text: string;
+  tokensIn: number;
+  tokensOut: number;
+  finishReason: string;
+};
+
+// ---------- Small utilities ----------
+
+export class ProviderError extends Error {
+  code: string;
+  status: number;
+  constructor(code: string, message: string, status = 500) {
+    super(message);
+    this.code = code;
+    this.status = status;
   }
+}
 
-  let corrId = '';
+function nowMs() { return Date.now(); }
 
-  try {
-    // Setup common request handling
-    const { corrId: _corrId, userId, supabaseClient } = await setupChatRequest(req);
-    corrId = _corrId;
-    console.log(`[${corrId}] Google Gemini chat request started`);
+async function delay(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
-    // Check if Google API key is available
-    const googleKey = Deno.env.get('GOOGLE_API_KEY');
-    console.log(`[${corrId}] Google API key configured: ${!!googleKey}`);
-    
-    if (!googleKey) {
-      console.error(`[${corrId}] Google API key not found in environment`);
-      throw new Error('NO_API_KEY: Google API key not configured');
-    }
+async function fetchWithTimeoutRetry(
+  url: string,
+  init: RequestInit & { timeoutMs?: number; retries?: number } = {},
+): Promise<Response> {
+  const timeoutMs = init.timeoutMs ?? 15000;
+  const retries = init.retries ?? 1;
 
-    // Parse request
-    const reqData = await req.json();
-    console.log(`[${corrId}] Raw request data:`, JSON.stringify(reqData));
-
-    // Process common validation
-    const context = await processCommonValidation(supabaseClient, userId, corrId, reqData, GOOGLE_MODELS);
-
-    // Call Google Gemini provider
-    let callStartTime = Date.now();
-    
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), timeoutMs);
     try {
-      console.log(`[${corrId}] Calling Google Gemini for model: ${context.request.model}`);
+      const res = await fetch(url, { ...init, signal: ac.signal });
+      clearTimeout(t);
+      return res;
+    } catch (err) {
+      clearTimeout(t);
+      if (attempt === retries) throw err;
+      await delay(250);
+    }
+  }
+  // Unreachable
+  throw new Error('UNREACHABLE_FETCH');
+}
 
-      // Ensure model has the models/ prefix for the API
-      const modelForAPI = context.request.model.startsWith('models/') 
-        ? context.request.model 
-        : `models/${context.request.model}`;
+function mapHttpToCode(provider: 'openai' | 'anthropic' | 'google', status: number, message?: string): ProviderError {
+  const errorMessage = message || `${provider}: HTTP ${status}`;
+  if (status === 400) return new ProviderError('BAD_INPUT', errorMessage, 400);
+  if (status === 401 || status === 403) return new ProviderError('UNAUTHORIZED', errorMessage, 401);
+  if (status === 404) return new ProviderError('NOT_FOUND', errorMessage, 404);
+  if (status === 409) return new ProviderError('CONFLICT', errorMessage, 409);
+  if (status === 429) return new ProviderError('RATE_LIMITED', errorMessage, 429);
+  if (status >= 500) return new ProviderError('SERVICE_UNAVAILABLE', errorMessage, 503);
+  return new ProviderError('INTERNAL', errorMessage, status);
+}
 
-      // Use the exact format your callGemini function expects
-      const chatArgs = {
-        model: modelForAPI,
-        messages: [
-          {
-            role: 'user',
-            content: context.request.message
-          }
-        ],
-        temperature: context.request.temperature ?? 0.7,
-        max_tokens: context.request.max_tokens ?? 1000
-      };
+// NOTE: Realtime models (e.g., gpt-realtime) require WS/WebRTC channels, not this HTTP path.
+export function isHttpUnsupportedModel(model: string): boolean {
+  return model === 'gpt-realtime';
+}
 
-      console.log(`[${corrId}] Calling callGemini with args:`, JSON.stringify(chatArgs));
+export function resolveProvider(model: string): 'openai' | 'anthropic' | 'google' | 'unknown' {
+  if (model.startsWith('gpt-') || model.startsWith('o1-') || model.startsWith('o3-') || model.startsWith('o4-')) return 'openai';
+  if (model.startsWith('claude')) return 'anthropic';
+  if (model.startsWith('models/gemini') || model.startsWith('gemini')) return 'google';
+  return 'unknown';
+}
 
-      const providerResult = await callGemini(chatArgs);
-      const callLatency = Date.now() - callStartTime;
-      
-      console.log(`[${corrId}] Google Gemini call successful. Latency: ${callLatency}ms, Tokens: ${providerResult.tokensIn}→${providerResult.tokensOut}`);
+export function isProviderAvailable(p: 'openai' | 'anthropic' | 'google'): boolean {
+  if (p === 'openai') return !!Deno.env.get('OPENAI_API_KEY');
+  if (p === 'anthropic') return !!Deno.env.get('ANTHROPIC_API_KEY');
+  if (p === 'google') return !!Deno.env.get('GOOGLE_API_KEY');
+  return false;
+}
 
-      // Log successful provider call
-      await logOpsEvent(supabaseClient, userId, corrId, 'info', 'PROVIDER_SUCCESS', 'Google Gemini call completed successfully', {
-        provider: 'google',
-        model: context.request.model,
-        latencyMs: callLatency,
-        tokensIn: providerResult.tokensIn,
-        tokensOut: providerResult.tokensOut,
-        finishReason: providerResult.finishReason
-      });
+// ---------- OpenAI ----------
 
-      return createSuccessResponse(context, providerResult, 'google');
+export async function callOpenAI(args: ChatArgs | any): Promise<ChatOut> {
+  const key = Deno.env.get('OPENAI_API_KEY');
+  if (!key) throw new ProviderError('NO_API_KEY', 'OpenAI key missing', 401);
+  if (isHttpUnsupportedModel(args.model)) {
+    throw new ProviderError('BAD_INPUT', 'gpt-realtime requires a realtime channel', 400);
+  }
 
-    } catch (providerError) {
-      const callLatency = Date.now() - callStartTime;
-      console.error(`[${corrId}] Google Gemini call failed:`, providerError);
-      console.error(`[${corrId}] Provider error details:`, {
-        message: providerError.message,
-        name: providerError.name,
-        stack: providerError.stack,
-        code: providerError.code,
-        status: providerError.status
-      });
+  const started = nowMs();
+  
+  // Build request body from args - support all possible OpenAI parameters
+  const body: any = {
+    model: args.model,
+    messages: args.messages,
+    stream: args.stream || false,
+  };
 
-      // Log provider failure
-      await logOpsEvent(supabaseClient, userId, corrId, 'error', 'PROVIDER_FAILED', 'Google Gemini call failed', {
-        provider: 'google',
-        model: context.request.model,
-        latencyMs: callLatency,
-        error: providerError.message,
-        errorType: providerError.constructor.name
-      });
+  // Handle model-specific parameter requirements
+  const isGPT5Series = args.model?.startsWith('gpt-5');
+  const isGPT41Series = args.model?.startsWith('gpt-4.1');
+  const isReasoningModel = args.model?.startsWith('o1') || args.model?.startsWith('o3') || args.model?.startsWith('o4');
+  const isLegacyModel = args.model?.startsWith('gpt-4o') || args.model?.startsWith('gpt-4');
 
-      // Rollback wallet deduction
-      await rollbackWallet(context, providerError);
+  // Temperature handling - only for models that support it
+  if (args.temperature !== undefined && (isLegacyModel || isGPT41Series)) {
+    body.temperature = args.temperature;
+  }
+  // GPT-5 and reasoning models don't support custom temperature (they use default 1.0)
 
-      // Determine error code from provider error
-      let errorCode = 'SERVICE_UNAVAILABLE';
-      let status = 503;
-      let errorMessage = 'Google Gemini service unavailable';
+  // Token limit handling (different parameter names for different model families)
+  if (args.max_tokens !== undefined) {
+    if (isGPT5Series || isReasoningModel) {
+      body.max_completion_tokens = args.max_tokens;
+    } else {
+      body.max_tokens = args.max_tokens;
+    }
+  }
 
-      if (providerError instanceof ProviderError) {
-        errorCode = providerError.code;
-        status = providerError.status;
-        errorMessage = providerError.message;
-      } else {
-        errorMessage = providerError.message || 'Google Gemini call failed';
-      }
+  // Direct max_completion_tokens support
+  if (args.max_completion_tokens !== undefined) {
+    body.max_completion_tokens = args.max_completion_tokens;
+  }
 
-      throw new Error(`${errorCode}: ${errorMessage}`);
+  // Other parameters (not supported by reasoning models)
+  if (!isReasoningModel) {
+    if (args.top_p !== undefined) body.top_p = args.top_p;
+    if (args.frequency_penalty !== undefined) body.frequency_penalty = args.frequency_penalty;
+    if (args.presence_penalty !== undefined) body.presence_penalty = args.presence_penalty;
+    if (args.stop) body.stop = args.stop;
+    if (args.tools) {
+      body.tools = args.tools;
+      if (args.tool_choice) body.tool_choice = args.tool_choice;
+    }
+  }
+
+  // GPT-5 specific parameters
+  if (isGPT5Series) {
+    if (args.reasoning_effort) body.reasoning_effort = args.reasoning_effort;
+    if (args.verbosity) body.verbosity = args.verbosity;
+  }
+
+  // Set reasonable defaults if nothing specified
+  if (body.max_tokens === undefined && body.max_completion_tokens === undefined) {
+    if (isGPT5Series || isReasoningModel) {
+      body.max_completion_tokens = 512;
+    } else {
+      body.max_tokens = 512;
+    }
+  }
+
+  // Only set default temperature for models that support it
+  if (body.temperature === undefined && (isLegacyModel || isGPT41Series)) {
+    body.temperature = 0.3;
+  }
+
+  console.log('🚀 OpenAI API request body:', JSON.stringify(body, null, 2));
+
+  const res = await fetchWithTimeoutRetry('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    timeoutMs: 15000,
+    retries: 1,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('❌ OpenAI API error:', res.status, errorText);
+    
+    let errorMessage = `HTTP ${res.status}`;
+    try {
+      const error = JSON.parse(errorText);
+      errorMessage = error.error?.message || errorMessage;
+    } catch {
+      errorMessage = errorText || errorMessage;
+    }
+    
+    throw mapHttpToCode('openai', res.status, errorMessage);
+  }
+
+  const json = await res.json();
+  console.log('✅ OpenAI API success, tokens used:', json.usage);
+  
+  const choice = json?.choices?.[0];
+  const text = choice?.message?.content ?? '';
+  const usage = json?.usage || {};
+  const out: ChatOut = {
+    text,
+    tokensIn: usage.prompt_tokens ?? 0,
+    tokensOut: usage.completion_tokens ?? 0,
+    finishReason: choice?.finish_reason ?? 'stop',
+  };
+  
+  return out;
+}
+
+// ---------- Anthropic ----------
+
+export async function callAnthropic(args: ChatArgs): Promise<ChatOut> {
+  const key = Deno.env.get('ANTHROPIC_API_KEY');
+  if (!key) throw new ProviderError('NO_API_KEY', 'Anthropic key missing', 401);
+
+  // Convert OpenAI-style messages -> Anthropic format (nearly identical roles)
+  const messages = args.messages.map((m) => ({ role: m.role, content: m.content }));
+
+  const res = await fetchWithTimeoutRetry('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: args.model,
+      max_tokens: args.max_tokens ?? 512,
+      temperature: args.temperature ?? 0.3,
+      messages,
+    }),
+    timeoutMs: 15000,
+    retries: 1,
+  });
+
+  if (!res.ok) throw mapHttpToCode('anthropic', res.status);
+
+  const json = await res.json();
+  const text = json?.content?.[0]?.text ?? '';
+  const usage = json?.usage || {};
+  return {
+    text,
+    tokensIn: usage.input_tokens ?? 0,
+    tokensOut: usage.output_tokens ?? 0,
+    finishReason: json?.stop_reason ?? 'stop',
+  };
+}
+
+// ---------- Google Gemini ----------
+
+export async function callGemini(args: any): Promise<ChatOut> {
+  const key = Deno.env.get('GOOGLE_API_KEY');
+  if (!key) throw new ProviderError('NO_API_KEY', 'Google Gemini key missing', 401);
+
+  // Use the exact model name as provided - don't modify it
+  // The URL format is: /v1beta/models/{model}:generateContent
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(args.model)}:generateContent?key=${key}`;
+  
+  console.log('🚀 Gemini API URL:', url);
+  
+  // Build request body - support Gemini's native format
+  const body: any = {};
+
+  // Handle contents (Gemini's message format)
+  if (args.contents) {
+    body.contents = args.contents;
+  } else if (args.messages) {
+    // Convert ChatArgs messages to Gemini contents format
+    body.contents = args.messages.map((m: any) => ({
+      role: m.role === 'assistant' ? 'model' : m.role,
+      parts: [{ text: m.content }],
+    }));
+  }
+
+  // System instructions
+  if (args.systemInstruction) {
+    body.systemInstruction = args.systemInstruction;
+  }
+
+  // Generation configuration
+  if (args.generationConfig || args.temperature !== undefined || args.max_tokens !== undefined) {
+    body.generationConfig = args.generationConfig || {};
+    
+    if (args.temperature !== undefined && !body.generationConfig.temperature) {
+      body.generationConfig.temperature = args.temperature;
+    }
+    
+    if (args.max_tokens !== undefined && !body.generationConfig.maxOutputTokens) {
+      body.generationConfig.maxOutputTokens = args.max_tokens;
     }
 
-  } catch (error) {
-    console.error(`[${corrId}] Final error:`, error);
-    return createErrorResponse(corrId, error);
+    // Apply defaults if nothing specified
+    if (!body.generationConfig.temperature && !body.generationConfig.maxOutputTokens) {
+      body.generationConfig.temperature = 0.3;
+      body.generationConfig.maxOutputTokens = 512;
+    }
   }
-});
+
+  // Safety settings
+  if (args.safetySettings) {
+    body.safetySettings = args.safetySettings;
+  }
+
+  // Tools (function calling)
+  if (args.tools) {
+    body.tools = args.tools;
+  }
+
+  console.log('🚀 Gemini API request body:', JSON.stringify(body, null, 2));
+
+  const res = await fetchWithTimeoutRetry(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    timeoutMs: 15000,
+    retries: 1,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('❌ Gemini API error:', res.status, errorText);
+    
+    let errorMessage = `HTTP ${res.status}`;
+    try {
+      const error = JSON.parse(errorText);
+      errorMessage = error.error?.message || errorMessage;
+    } catch {
+      errorMessage = errorText || errorMessage;
+    }
+    
+    throw mapHttpToCode('google', res.status, errorMessage);
+  }
+
+  const json = await res.json();
+  console.log('✅ Gemini API success, usage:', json.usageMetadata);
+  
+  const parts = json?.candidates?.[0]?.content?.parts ?? [];
+  const text = parts.map((p: any) => p?.text ?? '').join('');
+
+  // Gemini may omit usage; default to 0 when absent
+  return {
+    text,
+    tokensIn: json?.usageMetadata?.promptTokenCount ?? 0,
+    tokensOut: json?.usageMetadata?.candidatesTokenCount ?? 0,
+    finishReason: json?.candidates?.[0]?.finishReason ?? 'stop',
+  };
+}

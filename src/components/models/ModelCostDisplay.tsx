@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { useAuthStore } from "@/store/auth";
 import { useFxStore } from "@/store/fx";
 import { useModelsStore } from "@/store/models";
+import { useChatStore } from "@/store/chat";
 
 interface ModelCostDisplayProps {
   model: {
@@ -18,15 +19,50 @@ export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProp
   const { user } = useAuthStore();
   const { rates, convertFromINR } = useFxStore();
   const { pricing: modelPricing } = useModelsStore();
+  const { costEstimateData } = useChatStore();
 
-  // Calculate cost directly from model pricing with estimated 4000 tokens (2000 in, 2000 out)
+  // Calculate cost using actual query estimation or fallback to default estimation
   const calculateCost = () => {
-    // Default to INR if no preferred currency is set
     const currency = user?.user_metadata?.preferred_currency || 'INR';
+    
+    // Try to use actual cost estimate data for this model if available
+    if (costEstimateData?.costs) {
+      const modelCost = costEstimateData.costs.find((cost: any) => cost.modelId === model.id);
+      if (modelCost) {
+        // Use actual estimated cost for this query
+        const costINR = modelCost.costINR;
+        
+        if (currency === 'INR') {
+          return {
+            cost: costINR,
+            currency: '₹',
+            formatted: `₹${costINR.toFixed(costINR < 0.01 ? 4 : 2)}`
+          };
+        }
+        
+        // Convert to other currencies if available
+        if (rates[currency]) {
+          const convertedCost = convertFromINR(costINR, currency);
+          const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency;
+          return {
+            cost: convertedCost,
+            currency: currencySymbol,
+            formatted: `${currencySymbol}${convertedCost.toFixed(convertedCost < 0.01 ? 4 : 2)}`
+          };
+        }
+        
+        return {
+          cost: costINR,
+          currency: '₹',
+          formatted: `₹${costINR.toFixed(costINR < 0.01 ? 4 : 2)}`
+        };
+      }
+    }
+    
+    // Fallback to estimated cost calculation (2000 in, 2000 out tokens)
     const estimatedTokensIn = 2000;
     const estimatedTokensOut = 2000;
     
-    // Get pricing - prefer from pricing store, fallback to model's USD pricing
     const modelPricingData = modelPricing?.rates?.[model.id];
     const inputCostPer1M = modelPricingData?.inputPer1M || model.pricingUSD.inputPer1M;
     const outputCostPer1M = modelPricingData?.outputPer1M || model.pricingUSD.outputPer1M;
@@ -35,34 +71,29 @@ export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProp
     const outputCostUSD = (estimatedTokensOut / 1000000) * outputCostPer1M;
     const totalCostUSD = inputCostUSD + outputCostUSD;
     
-    // Convert USD to INR first (our base currency)
-    let totalCostINR = totalCostUSD * 84; // Fallback rate if FX unavailable
+    let totalCostINR = totalCostUSD * 84; // Fallback rate
     if (rates.USD && typeof rates.USD.rate === 'number') {
-      totalCostINR = totalCostUSD * rates.USD.rate; // Convert USD to INR using proper rate
+      totalCostINR = totalCostUSD * rates.USD.rate;
     }
     
-    // For INR, use cost directly
     if (currency === 'INR') {
       return {
         cost: totalCostINR,
         currency: '₹',
-        formatted: `₹${totalCostINR.toFixed(totalCostINR < 0.01 ? 4 : 2)}`
+        formatted: `₹${totalCostINR.toFixed(totalCostINR < 0.01 ? 4 : 2)} (est)`
       };
     }
     
-    // For other currencies, try to convert or fallback to INR
     if (rates[currency]) {
       const convertedCost = convertFromINR(totalCostINR, currency);
       const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency;
-      
       return {
         cost: convertedCost,
         currency: currencySymbol,
-        formatted: `${currencySymbol}${convertedCost.toFixed(convertedCost < 0.01 ? 4 : 2)}`
+        formatted: `${currencySymbol}${convertedCost.toFixed(convertedCost < 0.01 ? 4 : 2)} (est)`
       };
     }
     
-    // Fallback to INR if conversion not available
     return {
       cost: totalCostINR,
       currency: '₹',

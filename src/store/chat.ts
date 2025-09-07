@@ -17,6 +17,7 @@ export interface ChatState {
   error: string | null;
   wallet: { inr: number };
   isLoadingWallet: boolean;
+  costEstimateData: any | null;
   
   // Stream control
   streamController: AbortController | null;
@@ -48,6 +49,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   wallet: { inr: 0.00 },
   isLoadingWallet: false,
   streamController: null,
+  costEstimateData: null,
 
   // Actions
   setQuery: (query) => set({ query }),
@@ -77,20 +79,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
 
         // Call backend services in parallel with timeout
-        const [estimateResult, analyzeResult] = await Promise.all([
-          backendAdapter.postEstimate(query, history),
+        const [costEstimateResult, analyzeResult] = await Promise.all([
+          backendAdapter.postCostEstimate(query, history),
           backendAdapter.postAnalyze(query, history)
         ]);
 
-        console.log('Backend response:', { estimateResult, analyzeResult });
+        console.log('Backend response:', { costEstimateResult, analyzeResult });
         
         set({
           cost: { 
-            display: estimateResult.estCostDisplay, 
-            inr: estimateResult.estCostINR 
+            display: costEstimateResult.totalCostINR, 
+            inr: costEstimateResult.totalCostINR 
           },
           tags: analyzeResult.tags,
-          phase: 'ready'
+          phase: 'ready',
+          costEstimateData: costEstimateResult // Store full estimate data
         });
       } catch (backendError) {
         console.warn('Backend call failed, falling back to mocks:', backendError);
@@ -322,7 +325,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     tags: [],
     messages: [],
     error: null,
-    streamController: null
+    streamController: null,
+    costEstimateData: null
   }),
 
   addMessage: (message) => set({ 

@@ -25,6 +25,28 @@ export interface EstimateResponse {
   displayCurrency: string;
 }
 
+export interface CostEstimateResponse {
+  tokens: {
+    input: number;
+    output: number;
+    method: string;
+  };
+  fx: {
+    usdToInr: number;
+    fetchedAt: string;
+    stale: boolean;
+  };
+  costs: Array<{
+    modelId: string;
+    costUSD: number;
+    costINR: number;
+  }>;
+  totalCostUSD: number;
+  totalCostINR: number;
+  timestamp: string;
+  requestId: string;
+}
+
 export interface AnalyzeResponse {
   tags: string[];
   recommended: Array<{
@@ -197,6 +219,18 @@ export const postEstimate = async (
   history: Array<{ role: string; content: string }> = []
 ): Promise<EstimateResponse> => {
   return callFunction<EstimateResponse>('estimate', { message, history });
+};
+
+export const postCostEstimate = async (
+  message: string, 
+  history: Array<{ role: string; content: string }> = [],
+  requestedModels?: string[]
+): Promise<CostEstimateResponse> => {
+  return callFunction<CostEstimateResponse>('cost-estimate', { 
+    message, 
+    history,
+    requestedModels 
+  });
 };
 
 export const postAnalyze = async (

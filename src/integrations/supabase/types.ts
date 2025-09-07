@@ -44,21 +44,30 @@ export type Database = {
       fx_rates: {
         Row: {
           base: string
+          confidence_score: number | null
           fetched_at: string
           id: number
+          prompt_version: string | null
           rates: Json
+          source: string | null
         }
         Insert: {
           base?: string
+          confidence_score?: number | null
           fetched_at: string
           id?: number
+          prompt_version?: string | null
           rates: Json
+          source?: string | null
         }
         Update: {
           base?: string
+          confidence_score?: number | null
           fetched_at?: string
           id?: number
+          prompt_version?: string | null
           rates?: Json
+          source?: string | null
         }
         Relationships: []
       }
@@ -87,6 +96,7 @@ export type Database = {
           created_at: string
           id: string
           idx: number
+          model_id: string | null
           role: string
           tokens_in: number | null
           tokens_out: number | null
@@ -98,6 +108,7 @@ export type Database = {
           created_at?: string
           id?: string
           idx?: never
+          model_id?: string | null
           role: string
           tokens_in?: number | null
           tokens_out?: number | null
@@ -109,6 +120,7 @@ export type Database = {
           created_at?: string
           id?: string
           idx?: never
+          model_id?: string | null
           role?: string
           tokens_in?: number | null
           tokens_out?: number | null

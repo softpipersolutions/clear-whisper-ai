@@ -26,6 +26,15 @@ export async function startRealTimeStream(
   console.log('🚀 Starting real-time stream for model:', model);
 
   try {
+    // Get current session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      throw new Error('Not authenticated');
+    }
+
+    console.log('📡 Making streaming request to chat-stream endpoint');
+
     // Call the streaming edge function
     const response = await fetch(
       `https://dxxovxcdbdkyhokusnaz.supabase.co/functions/v1/chat-stream`,
@@ -33,7 +42,8 @@ export async function startRealTimeStream(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eG92eGNkYmRreWhva3VzbmF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxMzc3NDEsImV4cCI6MjA3MjcxMzc0MX0.Kq8VD8YUfbdtZUgn1gWk6FuU_Cs1nX8furJhOjiWZR8`,
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eG92eGNkYmRreWhva3VzbmF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxMzc3NDEsImV4cCI6MjA3MjcxMzc0MX0.Kq8VD8YUfbdtZUgn1gWk6FuU_Cs1nX8furJhOjiWZR8',
         },
         body: JSON.stringify({
           model,
@@ -46,13 +56,20 @@ export async function startRealTimeStream(
       }
     );
 
+    console.log('📡 Response status:', response.status);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('❌ HTTP error response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
     }
 
     if (!response.body) {
+      console.error('❌ No response body from streaming endpoint');
       throw new Error('No response body');
     }
+
+    console.log('📖 Starting to read stream data');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -73,6 +90,7 @@ export async function startRealTimeStream(
         }
 
         const chunk = decoder.decode(value);
+        console.log('📦 Received chunk:', chunk.substring(0, 100) + '...');
         const lines = chunk.split('\n').filter(line => line.trim().startsWith('data: '));
 
         for (const line of lines) {

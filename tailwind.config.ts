@@ -35,6 +35,13 @@ export default {
 					light: 'hsl(var(--neon-orange-light))',
 					foreground: 'hsl(var(--neon-orange-foreground))'
 				},
+				'blue-500': 'hsl(var(--blue-500))',
+				'emerald-500': 'hsl(var(--emerald-500))',
+				'green-500': 'hsl(var(--green-500))',
+				'yellow-500': 'hsl(var(--yellow-500))',
+				'amber-500': 'hsl(var(--amber-500))',
+				'purple-500': 'hsl(var(--purple-500))',
+				'violet-500': 'hsl(var(--violet-500))',
 				primary: {
 					DEFAULT: 'hsl(var(--primary))',
 					foreground: 'hsl(var(--primary-foreground))'

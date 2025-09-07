@@ -59,6 +59,14 @@ All colors MUST be HSL.
     --blue-500: 217 91 60; /* Blue for OpenAI */
     --blue-50: 217 91 95;
     --blue-900: 217 91 15;
+    
+    /* Performance filter colors */
+    --emerald-500: 160 84 39;
+    --green-500: 142 76 36;
+    --yellow-500: 45 93 47;
+    --amber-500: 45 93 47;
+    --purple-500: 262 83 58;
+    --violet-500: 262 83 58;
 
     --sidebar-background: 0 0 98;
     --sidebar-foreground: 240 5.3% 26.1%;

@@ -2,7 +2,7 @@ import { useChatStore } from "@/store/chat";
 import { useAuthStore } from "@/store/auth";
 import { useFxStore } from "@/store/fx";
 import { useModelsStore } from "@/store/models";
-import { filterByTags } from "@/adapters/models";
+import { TagFilterBar } from "./TagFilterBar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,17 @@ const RightModels = () => {
   const [isStartingChat, setIsStartingChat] = useState<string | null>(null);
   const { user } = useAuthStore();
   const { convertFromINR, fetchFxRate, isStale, rates, error: fxError } = useFxStore();
-  const { models: allModels, pricing, fx, loading: modelsLoading, fetchModels, forceRefresh } = useModelsStore();
+  const { 
+    models: allModels, 
+    pricing, 
+    fx, 
+    loading: modelsLoading, 
+    fetchModels, 
+    forceRefresh,
+    activeFilter,
+    getFilteredModels,
+    setActiveFilter
+  } = useModelsStore();
   
   // Get user's preferred currency
   const userCurrency = user?.user_metadata?.preferred_currency || 'INR';
@@ -60,7 +70,7 @@ const RightModels = () => {
     }
   }, [userCurrency, cost, fetchFxRate]);
 
-  const models = filterByTags(allModels, tags);
+  const models = getFilteredModels(tags);
 
   if (phase === 'estimating') {
     return (
@@ -191,29 +201,49 @@ const RightModels = () => {
         )}
       </AnimatePresence>
 
-      {/* Tags */}
+      {/* Tag Filter Bar */}
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 10 }}
+          transition={{ duration: 0.3 }}
+        >
+          <TagFilterBar
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            models={allModels}
+            queryAnalysis={tags}
+            className="mb-2"
+          />
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Detected Tags (if any) */}
       <AnimatePresence>
         {tags.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.2, delay: 0.1 }}
           >
-            <h3 className="text-sm font-medium mb-2 text-foreground">Detected Tags</h3>
-            <div className="flex flex-wrap gap-1">
-              {tags.map((tag, index) => (
-                <motion.div
-                  key={tag}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.2, delay: index * 0.05 }}
-                >
-                  <Badge variant="secondary" className="text-xs shadow-sm">
-                    {tag}
-                  </Badge>
-                </motion.div>
-              ))}
+            <div className="mb-4">
+              <h4 className="text-xs font-medium mb-2 text-muted-foreground">Query Analysis</h4>
+              <div className="flex flex-wrap gap-1">
+                {tags.map((tag, index) => (
+                  <motion.div
+                    key={tag}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.2, delay: index * 0.05 }}
+                  >
+                    <Badge variant="secondary" className="text-xs shadow-sm">
+                      {tag}
+                    </Badge>
+                  </motion.div>
+                ))}
+              </div>
             </div>
           </motion.div>
         )}
@@ -221,7 +251,19 @@ const RightModels = () => {
 
       {/* Models */}
       <div>
-        <h3 className="text-sm font-medium mb-3 text-foreground">Available Models</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-foreground">
+            {activeFilter === 'all' ? 'Available Models' :
+             activeFilter === 'best-for-query' ? 'Recommended Models' :
+             activeFilter === 'cheapest' ? 'Most Affordable' :
+             activeFilter === 'fastest' ? 'Fastest Models' :
+             activeFilter === 'most-capable' ? 'Most Capable' :
+             `${activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)} Models`}
+          </h3>
+          <span className="text-xs text-muted-foreground">
+            {models.length} model{models.length !== 1 ? 's' : ''}
+          </span>
+        </div>
         <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-background">
           <AnimatePresence>
             {models.map((model, index) => (

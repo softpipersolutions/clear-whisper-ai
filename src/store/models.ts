@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import { fetchModels, type ModelsResponse, type ModelInfo } from '@/adapters/models';
+import { 
+  fetchModels, 
+  filterAndSortModels,
+  type ModelsResponse, 
+  type ModelInfo, 
+  type FilterTag 
+} from '@/adapters/models';
 
 interface ModelsState {
   models: ModelInfo[];
@@ -9,9 +15,14 @@ interface ModelsState {
   error: string | null;
   lastFetch: number;
   
+  // Filter state
+  activeFilter: FilterTag;
+  
   // Actions
   fetchModels: () => Promise<void>;
   getModelById: (id: string) => ModelInfo | undefined;
+  getFilteredModels: (queryTags?: string[]) => ModelInfo[];
+  setActiveFilter: (filter: FilterTag) => void;
   clearError: () => void;
   forceRefresh: () => Promise<void>;
 }
@@ -23,6 +34,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   loading: false,
   error: null,
   lastFetch: 0,
+  activeFilter: 'all',
 
   fetchModels: async () => {
     const now = Date.now();
@@ -57,6 +69,15 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   getModelById: (id: string) => {
     const { models } = get();
     return models.find(model => model.id === id);
+  },
+
+  getFilteredModels: (queryTags?: string[]) => {
+    const { models, activeFilter } = get();
+    return filterAndSortModels(models, activeFilter, queryTags);
+  },
+
+  setActiveFilter: (filter: FilterTag) => {
+    set({ activeFilter: filter });
   },
 
   clearError: () => set({ error: null }),

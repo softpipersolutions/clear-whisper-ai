@@ -14,3 +14,9 @@ verify_jwt = true
 
 [functions.chat-google]
 verify_jwt = true
+
+[functions.fx-updater]
+verify_jwt = false
+
+[functions.fx-trigger]
+verify_jwt = false

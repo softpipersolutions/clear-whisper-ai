@@ -219,35 +219,6 @@ const RightModels = () => {
         </motion.div>
       </AnimatePresence>
 
-      {/* Detected Tags (if any) */}
-      <AnimatePresence>
-        {tags.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.2, delay: 0.1 }}
-          >
-            <div className="mb-4">
-              <h4 className="text-xs font-medium mb-2 text-muted-foreground">Query Analysis</h4>
-              <div className="flex flex-wrap gap-1">
-                {tags.map((tag, index) => (
-                  <motion.div
-                    key={tag}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.2, delay: index * 0.05 }}
-                  >
-                    <Badge variant="secondary" className="text-xs shadow-sm">
-                      {tag}
-                    </Badge>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Models */}
       <div>

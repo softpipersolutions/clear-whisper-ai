@@ -38,7 +38,7 @@ export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProp
     // Convert USD to INR first (our base currency)
     let totalCostINR = totalCostUSD * 84; // Fallback rate if FX unavailable
     if (rates.USD && typeof rates.USD.rate === 'number') {
-      totalCostINR = totalCostUSD / rates.USD.rate; // Convert USD to INR
+      totalCostINR = totalCostUSD * rates.USD.rate; // Convert USD to INR using proper rate
     }
     
     // For INR, use cost directly

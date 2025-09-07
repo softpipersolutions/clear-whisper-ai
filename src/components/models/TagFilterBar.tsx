@@ -140,8 +140,8 @@ export const TagFilterBar = memo(({
         </span>
       </h3>
       
-      <ScrollArea className="w-full">
-        <div className="flex gap-2 pb-2">
+      <div className="w-full overflow-x-auto overflow-y-hidden">
+        <div className="flex gap-2 pb-2 min-w-max">
           <AnimatePresence>
             {filterTags.map((tag, index) => {
               const isActive = activeFilter === tag.id;
@@ -196,7 +196,7 @@ export const TagFilterBar = memo(({
             })}
           </AnimatePresence>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 });

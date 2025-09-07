@@ -25,6 +25,12 @@ interface StreamEvent {
   error?: string;
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 export default async function handler(req: Request): Promise<Response> {
   console.log('🚀 Chat stream request received');
 

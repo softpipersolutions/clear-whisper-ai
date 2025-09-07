@@ -2,7 +2,8 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getModelCatalog, type ModelInfo } from '../_shared/catalog.ts';
-import { methodGuard, createStructuredError } from '../_shared/hardening.ts';
+import { methodGuard } from '../_shared/http.ts';
+import { createStructuredError } from '../_shared/hardening.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

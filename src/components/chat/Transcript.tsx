@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import VisuallyHidden from "@/components/common/VisuallyHidden";
 import { LoadingAnimation } from "./LoadingAnimation";
 import { MessageCostDisplay } from "./MessageCostDisplay";
+import { useModelsStore } from "@/store/models";
 
 const TypewriterText = ({ text, isComplete }: { text: string; isComplete: boolean }) => {
   const [displayText, setDisplayText] = useState('');
@@ -198,19 +199,34 @@ const Transcript = () => {
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium mb-1 text-muted-foreground">
-                      {message.role === 'user' ? 'You' : 'Assistant'}
+                    <div className="flex items-center gap-2 text-sm font-medium mb-1 text-muted-foreground">
+                      <span>{message.role === 'user' ? 'You' : 'Assistant'}</span>
+                      {message.role === 'assistant' && message.model_id && (
+                        <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded-full">
+                          {getModelById(message.model_id)?.name || message.model_id}
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm text-foreground whitespace-pre-wrap">
                       {message.content}
                     </div>
                      {(message.tokensIn > 0 || message.tokensOut > 0) && (
-                       <div className="text-xs text-muted-foreground mt-1" aria-label="Token usage">
-                         {message.tokensIn > 0 && `${message.tokensIn} tokens in`}
-                         {message.tokensIn > 0 && message.tokensOut > 0 && ' • '}
-                         {message.tokensOut > 0 && `${message.tokensOut} tokens out`}
-                       </div>
-                     )}
+                        <div className="text-xs text-muted-foreground mt-1" aria-label="Token usage">
+                          {message.tokensIn > 0 && message.tokensOut > 0 && message.model_id ? (
+                            <MessageCostDisplay
+                              tokensIn={message.tokensIn}
+                              tokensOut={message.tokensOut}
+                              modelId={message.model_id}
+                            />
+                          ) : (
+                            <>
+                              {message.tokensIn > 0 && `${message.tokensIn} tokens in`}
+                              {message.tokensIn > 0 && message.tokensOut > 0 && ' • '}
+                              {message.tokensOut > 0 && `${message.tokensOut} tokens out`}
+                            </>
+                          )}
+                        </div>
+                      )}
                   </div>
                 </motion.div>
               ))}

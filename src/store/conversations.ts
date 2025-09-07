@@ -15,6 +15,7 @@ export interface MessageItem {
   tokensOut: number;
   createdAt: string;
   idx: number;
+  model_id?: string;
 }
 
 export interface MessagesState {

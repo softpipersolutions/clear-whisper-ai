@@ -35,18 +35,33 @@ export function MessageCostDisplay({
     const inputCost = (tokensIn / 1000000) * inputCostPer1M;
     const outputCost = (tokensOut / 1000000) * outputCostPer1M;
     
-    let totalCost = inputCost + outputCost;
+    let totalCostUSD = inputCost + outputCost;
     
-    // Convert to user's preferred currency if needed
-    if (currency !== 'USD' && rates[currency]) {
-      totalCost = totalCost * rates[currency].rate;
+    // Convert USD to INR first (our base currency)
+    let totalCostINR = totalCostUSD;
+    if (rates.USD && typeof rates.USD.rate === 'number') {
+      totalCostINR = totalCostUSD / rates.USD.rate; // Convert USD to INR
     }
     
-    const currencySymbol = currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency;
+    // Then convert to user's preferred currency
+    if (currency === 'INR') {
+      return {
+        cost: totalCostINR,
+        formatted: `₹${totalCostINR.toFixed(totalCostINR < 0.01 ? 4 : 2)}`
+      };
+    } else if (currency !== 'INR' && rates[currency]) {
+      const finalCost = totalCostINR * rates[currency].rate;
+      const currencySymbol = currency === 'USD' ? '$' : currency;
+      return {
+        cost: finalCost,
+        formatted: `${currencySymbol}${finalCost.toFixed(finalCost < 0.01 ? 4 : 2)}`
+      };
+    }
     
+    // Fallback to INR
     return {
-      cost: totalCost,
-      formatted: `${currencySymbol}${totalCost.toFixed(totalCost < 0.01 ? 4 : 2)}`
+      cost: totalCostINR,
+      formatted: `₹${totalCostINR.toFixed(totalCostINR < 0.01 ? 4 : 2)}`
     };
   };
 

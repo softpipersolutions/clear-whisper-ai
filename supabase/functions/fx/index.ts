@@ -72,7 +72,7 @@ serve(async (req) => {
     
     console.log(`[${corrId}] FX rates requested for: ${toCurrencies.join(', ')}`);
 
-    // Check latest cached rate
+    // Get latest rates from GPT-updated database (valid for 24 hours)
     const { data: cachedData, error: cacheError } = await supabaseClient
       .from('fx_rates')
       .select('*')
@@ -85,86 +85,50 @@ serve(async (req) => {
     }
 
     const now = new Date();
-    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     
     let rates = {};
     let fetchedAt = '';
     let stale = false;
 
-    // Check if cached data is fresh (≤6h old)
-    if (cachedData && new Date(cachedData.fetched_at) > sixHoursAgo) {
-      console.log(`[${corrId}] Using fresh cached rates`);
+    // Check if cached data is fresh (≤24h old for GPT rates)
+    if (cachedData && new Date(cachedData.fetched_at) > twentyFourHoursAgo) {
+      console.log(`[${corrId}] Using fresh GPT-updated rates`);
       rates = cachedData.rates;
       fetchedAt = cachedData.fetched_at;
-    } else {
-      console.log(`[${corrId}] Cache stale or missing, fetching from API`);
       
-      try {
-        // Fetch from ExchangeRate.host with circuit breaker and timeout
-        const fetchOperation = () => withTimeout(
-          fetch('https://api.exchangerate.host/latest?base=INR'),
-          1500,
-          'ExchangeRate.host API',
+      await logOpsEvent(supabaseClient, userId, corrId, 'info', 'FX_CACHE_HIT', 'Using fresh GPT FX rates', { 
+        source: cachedData.source || 'unknown',
+        fetchedAt: cachedData.fetched_at 
+      });
+    } else {
+      console.log(`[${corrId}] GPT rates stale or missing, using fallback`);
+      
+      // Fallback to older cached data (up to 7 days old) if GPT rates are stale
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      if (cachedData && new Date(cachedData.fetched_at) > sevenDaysAgo) {
+        console.log(`[${corrId}] Using stale cached rates as fallback`);
+        rates = cachedData.rates;
+        fetchedAt = cachedData.fetched_at;
+        stale = true;
+        
+        await logOpsEvent(supabaseClient, userId, corrId, 'warn', 'FX_STALE_FALLBACK', 'Using stale FX rates - GPT update needed', { 
+          source: cachedData.source || 'unknown',
+          fetchedAt: cachedData.fetched_at 
+        });
+      } else {
+        console.log(`[${corrId}] No valid cached data available`);
+        await logOpsEvent(supabaseClient, userId, corrId, 'error', 'FX_UNAVAILABLE', 'FX rates completely unavailable - GPT update required');
+        
+        return new Response(JSON.stringify({ 
+          error: 'FX_UNAVAILABLE',
+          message: 'Exchange rates unavailable - please try again later',
           corrId
-        );
-
-        const apiResponse = await circuitBreakers.fx.execute(fetchOperation, 'fx_api', corrId);
-        
-        if (!apiResponse.ok) {
-          throw new Error(`API response not OK: ${apiResponse.status}`);
-        }
-        
-        const apiData = await apiResponse.json();
-        
-        if (!apiData.success || !apiData.rates) {
-          throw new Error('Invalid API response format');
-        }
-
-        console.log(`[${corrId}] Successfully fetched rates from API`);
-        
-        // Store new rates in database
-        const { error: insertError } = await supabaseClient
-          .from('fx_rates')
-          .insert({
-            base: 'INR',
-            rates: apiData.rates,
-            fetched_at: now.toISOString()
-          });
-
-        if (insertError) {
-          console.error(`[${corrId}] Failed to cache rates:`, insertError);
-          // Continue with API data even if caching fails
-        }
-
-        rates = apiData.rates;
-        fetchedAt = now.toISOString();
-        
-        await logOpsEvent(supabaseClient, userId, corrId, 'info', 'FX_API_SUCCESS', 'Successfully fetched fresh FX rates');
-        
-      } catch (apiError) {
-        console.error(`[${corrId}] External API failed:`, apiError);
-        
-        // Fallback to last cached data if available
-        if (cachedData) {
-          console.log(`[${corrId}] Using stale cached rates as fallback`);
-          rates = cachedData.rates;
-          fetchedAt = cachedData.fetched_at;
-          stale = true;
-          
-          await logOpsEvent(supabaseClient, userId, corrId, 'warn', 'FX_STALE_FALLBACK', 'Using stale FX rates due to API failure', { error: apiError.message });
-        } else {
-          console.log(`[${corrId}] No cached data available`);
-          await logOpsEvent(supabaseClient, userId, corrId, 'error', 'FX_UNAVAILABLE', 'FX rates completely unavailable', { error: apiError.message });
-          
-          return new Response(JSON.stringify({ 
-            error: 'FX_UNAVAILABLE',
-            message: 'Exchange rates unavailable',
-            corrId
-          }), {
-            status: 503,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
+        }), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
     }
 

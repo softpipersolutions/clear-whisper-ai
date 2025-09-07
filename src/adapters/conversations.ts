@@ -35,6 +35,7 @@ export interface AppendMessageRequest {
   content: string;
   tokensIn?: number;
   tokensOut?: number;
+  modelId?: string;
 }
 
 export interface AppendMessageResponse {
@@ -51,6 +52,7 @@ export interface MessageListResponse {
     tokensOut: number;
     createdAt: string;
     idx: number;
+    model_id?: string;
   }>;
   nextCursor?: number;
 }
@@ -195,7 +197,14 @@ export const appendMessage = async (
   request: AppendMessageRequest,
   signal?: AbortSignal
 ): Promise<AppendMessageResponse> => {
-  return callFunction<AppendMessageResponse>('message-append', request, 10000, signal);
+  return callFunction<AppendMessageResponse>('message-append', {
+    chatId: request.chatId,
+    role: request.role,
+    content: request.content,
+    tokensIn: request.tokensIn,
+    tokensOut: request.tokensOut,
+    modelId: request.modelId
+  }, 10000, signal);
 };
 
 export const listMessages = async (params: {

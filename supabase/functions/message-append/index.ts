@@ -13,6 +13,7 @@ interface AppendMessageRequest {
   content: string;
   tokensIn?: number;
   tokensOut?: number;
+  modelId?: string;
 }
 
 interface AppendMessageResponse {
@@ -73,7 +74,8 @@ serve(async (req) => {
       role, 
       content, 
       tokensIn = 0, 
-      tokensOut = 0 
+      tokensOut = 0,
+      modelId 
     }: AppendMessageRequest = await req.json();
 
     // Validate input
@@ -128,7 +130,8 @@ serve(async (req) => {
         role,
         content,
         tokens_in: tokensIn,
-        tokens_out: tokensOut
+        tokens_out: tokensOut,
+        model_id: modelId
       })
       .select('id, created_at')
       .single();

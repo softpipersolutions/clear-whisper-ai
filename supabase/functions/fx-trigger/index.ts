@@ -26,15 +26,15 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('Triggering GPT-5 Nano FX rate update manually...');
+    console.log('Triggering ExchangeRate-API FX rate update manually...');
 
-    // Call the fx-gpt-updater function
-    const { data, error } = await supabase.functions.invoke('fx-gpt-updater', {
+    // Call the fx-updater function
+    const { data, error } = await supabase.functions.invoke('fx-updater', {
       body: { manual_trigger: true }
     });
 
     if (error) {
-      console.error('Error calling fx-gpt-updater:', error);
+      console.error('Error calling fx-updater:', error);
       throw new Error(`Failed to trigger FX update: ${error.message}`);
     }
 

@@ -30,6 +30,7 @@ export interface CostEstimateResponse {
     input: number;
     output: number;
     method: string;
+    confidence: string;
   };
   fx: {
     usdToInr: number;
@@ -38,8 +39,13 @@ export interface CostEstimateResponse {
   };
   costs: Array<{
     modelId: string;
+    provider: string;
     costUSD: number;
     costINR: number;
+    breakdown: {
+      inputCost: number;
+      outputCost: number;
+    };
   }>;
   totalCostUSD: number;
   totalCostINR: number;
@@ -226,11 +232,29 @@ export const postCostEstimate = async (
   history: Array<{ role: string; content: string }> = [],
   requestedModels?: string[]
 ): Promise<CostEstimateResponse> => {
-  return callFunction<CostEstimateResponse>('cost-estimate', { 
-    message, 
-    history,
-    requestedModels 
+  console.log('🚀 Calling cost-estimate function with:', { 
+    messageLength: message.length, 
+    historyLength: history.length,
+    requestedModels: requestedModels?.length || 'all'
   });
+  
+  try {
+    const result = await callFunction<CostEstimateResponse>('cost-estimate', { 
+      message, 
+      history,
+      requestedModels 
+    });
+    console.log('✅ Cost-estimate function returned:', {
+      totalCostINR: result.totalCostINR,
+      totalCostUSD: result.totalCostUSD,
+      costsCount: result.costs?.length,
+      tokens: result.tokens
+    });
+    return result;
+  } catch (error) {
+    console.error('❌ Cost-estimate function failed:', error);
+    throw error;
+  }
 };
 
 export const postAnalyze = async (

@@ -79,12 +79,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
 
         // Call backend services in parallel with timeout
+        console.log('📊 Starting cost estimation and analysis...');
         const [costEstimateResult, analyzeResult] = await Promise.all([
           backendAdapter.postCostEstimate(query, history),
           backendAdapter.postAnalyze(query, history)
         ]);
 
-        console.log('Backend response:', { costEstimateResult, analyzeResult });
+        console.log('✅ Backend response received:', { 
+          costEstimate: {
+            totalCostINR: costEstimateResult.totalCostINR,
+            totalCostUSD: costEstimateResult.totalCostUSD,
+            costsLength: costEstimateResult.costs?.length,
+            tokens: costEstimateResult.tokens,
+            fx: costEstimateResult.fx
+          }, 
+          analyze: analyzeResult 
+        });
         
         set({
           cost: { 
@@ -93,20 +103,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
           },
           tags: analyzeResult.tags,
           phase: 'ready',
-          costEstimateData: costEstimateResult // Store full estimate data
+          costEstimateData: costEstimateResult
         });
       } catch (backendError) {
-        console.warn('Backend call failed, falling back to mocks:', backendError);
+        console.warn('⚠️ Backend cost-estimate call failed, falling back to mocks:', backendError);
+        console.error('📄 Full backend error details:', {
+          type: (backendError as any)?.type,
+          message: (backendError as any)?.message,
+          originalError: (backendError as any)?.originalError
+        });
         
         // Fallback to mock services
         const tokens = mockServices.estimateTokens(query);
         const costINR = mockServices.estimateCostINR(tokens);
         const tags = mockServices.inferTags(query);
         
+        console.log('🔄 Using mock fallback:', { tokens, costINR, tags });
+        
         set({
           cost: { display: costINR, inr: costINR },
           tags,
-          phase: 'ready'
+          phase: 'ready',
+          costEstimateData: null // Clear old data when using fallback
         });
       }
     } catch (error) {

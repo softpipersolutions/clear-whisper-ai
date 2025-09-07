@@ -34,14 +34,22 @@ interface ModelCost {
 }
 
 interface CostEstimateResponse {
-  corrId: string;
-  tokenEstimate: TokenEstimate;
+  tokens: {
+    input: number;
+    output: number;
+    method: string;
+    confidence: string;
+  };
   costs: ModelCost[];
   fx: {
     usdToInr: number;
     fetchedAt: string;
     stale: boolean;
   };
+  totalCostUSD: number;
+  totalCostINR: number;
+  timestamp: string;
+  requestId: string;
 }
 
 async function estimateTokensWithGPT(message: string, history?: Array<{ role: string; content: string }>): Promise<TokenEstimate> {
@@ -231,6 +239,8 @@ function calculateModelCosts(
 }
 
 async function handleCostEstimate(req: Request, corrId: string): Promise<Response> {
+  console.log(`[${corrId}] 🚀 Cost estimate request received`);
+  
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -240,32 +250,60 @@ async function handleCostEstimate(req: Request, corrId: string): Promise<Respons
     const body = await req.json();
     const { message, history, models: requestedModels }: CostEstimateRequest = body;
 
+    console.log(`[${corrId}] 📝 Request data:`, { 
+      messageLength: message?.length, 
+      historyLength: history?.length,
+      requestedModelsCount: requestedModels?.length || 'all'
+    });
+
     if (!message || typeof message !== 'string') {
+      console.error(`[${corrId}] ❌ Invalid message input`);
       return createStructuredError('INVALID_INPUT', 'Message is required and must be a string', corrId, 400);
     }
 
     // Run token estimation and FX rate fetching in parallel
+    console.log(`[${corrId}] 🔄 Starting parallel estimation and FX fetch...`);
     const [tokenEstimate, fx] = await Promise.all([
       estimateTokensWithGPT(message, history),
       getFxRate(supabase)
     ]);
 
+    console.log(`[${corrId}] 📊 Token estimate:`, tokenEstimate);
+    console.log(`[${corrId}] 💱 FX rate:`, fx);
+
     // Get model catalog and calculate costs
+    console.log(`[${corrId}] 🤖 Getting model catalog...`);
     const modelCatalog = getModelCatalog();
+    console.log(`[${corrId}] 📋 Model catalog loaded: ${modelCatalog.length} models`);
+    
     const costs = calculateModelCosts(modelCatalog, tokenEstimate, fx, requestedModels);
+    console.log(`[${corrId}] 💰 Calculated costs for ${costs.length} models`);
+
+    // Calculate totals
+    const totalCostUSD = costs.reduce((sum, cost) => sum + cost.costUSD, 0);
+    const totalCostINR = costs.reduce((sum, cost) => sum + cost.costINR, 0);
 
     const response: CostEstimateResponse = {
-      corrId,
-      tokenEstimate,
+      tokens: {
+        input: tokenEstimate.input,
+        output: tokenEstimate.output,
+        method: tokenEstimate.method,
+        confidence: tokenEstimate.confidence
+      },
       costs,
       fx: {
         usdToInr: fx.usdToInr,
         fetchedAt: fx.fetchedAt,
         stale: fx.stale
-      }
+      },
+      totalCostUSD: Math.round(totalCostUSD * 100000) / 100000,
+      totalCostINR: Math.round(totalCostINR * 100) / 100,
+      timestamp: new Date().toISOString(),
+      requestId: corrId
     };
 
     // Log for monitoring
+    console.log(`[${corrId}] 💾 Logging success to ops_logs...`);
     await supabase.from('ops_logs').insert({
       user_id: null, // This is a utility function
       corr_id: corrId,
@@ -276,51 +314,65 @@ async function handleCostEstimate(req: Request, corrId: string): Promise<Respons
         tokenEstimate,
         modelsCount: costs.length,
         method: tokenEstimate.method,
-        confidence: tokenEstimate.confidence
+        confidence: tokenEstimate.confidence,
+        totalCostINR: response.totalCostINR,
+        totalCostUSD: response.totalCostUSD
       }
     });
 
+    console.log(`[${corrId}] ✅ Cost estimate completed successfully`);
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });
 
   } catch (error) {
-    console.error('Error in cost estimate:', error);
+    console.error(`[${corrId}] ❌ Error in cost estimate:`, error);
     
-    await supabase.from('ops_logs').insert({
-      user_id: null,
-      corr_id: corrId,
-      level: 'error',
-      code: 'COST_ESTIMATE_ERROR',
-      msg: error.message,
-      meta: { error: error.toString() }
-    });
+    try {
+      await supabase.from('ops_logs').insert({
+        user_id: null,
+        corr_id: corrId,
+        level: 'error',
+        code: 'COST_ESTIMATE_ERROR',
+        msg: error.message,
+        meta: { error: error.toString(), stack: error.stack }
+      });
+    } catch (logError) {
+      console.error(`[${corrId}] 🔥 Failed to log error:`, logError);
+    }
 
     return createStructuredError('ESTIMATION_FAILED', error.message, corrId, 500);
   }
 }
+}
 
 serve(async (req) => {
   const corrId = crypto.randomUUID();
+  console.log(`[${corrId}] 🌐 Incoming ${req.method} request to cost-estimate`);
 
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log(`[${corrId}] ✈️ CORS preflight request`);
     return new Response(null, { headers: corsHeaders });
   }
 
   const guardResponse = methodGuard(req, ['POST'], corsHeaders);
-  if (guardResponse) return guardResponse;
+  if (guardResponse) {
+    console.log(`[${corrId}] ⛔ Method guard failed`);
+    return guardResponse;
+  }
 
   try {
+    console.log(`[${corrId}] ⏱️ Starting cost estimate with 15s timeout...`);
     return await Promise.race([
       handleCostEstimate(req, corrId),
       new Promise<Response>((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 2000)
+        setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000)
       )
     ]);
   } catch (error) {
-    console.error('Request timeout or error:', error);
-    return createStructuredError('TIMEOUT', 'Request timed out', corrId, 408);
+    console.error(`[${corrId}] ⏰ Request timeout or error:`, error);
+    return createStructuredError('TIMEOUT', 'Request timed out or failed', corrId, 408);
   }
 });

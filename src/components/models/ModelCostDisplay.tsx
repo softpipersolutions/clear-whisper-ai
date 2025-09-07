@@ -18,7 +18,7 @@ interface ModelCostDisplayProps {
 export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProps) {
   const { user } = useAuthStore();
   const { rates, convertFromINR } = useFxStore();
-  const { pricing: modelPricing } = useModelsStore();
+  const { pricing: modelPricing, fx: modelsFx } = useModelsStore();
   const { costEstimateData } = useChatStore();
 
   // Calculate cost using actual query estimation or fallback to default estimation
@@ -59,7 +59,7 @@ export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProp
       }
     }
     
-    // Fallback to estimated cost calculation (2000 in, 2000 out tokens)
+    // Fallback to estimated cost calculation using live FX rates
     const estimatedTokensIn = 2000;
     const estimatedTokensOut = 2000;
     
@@ -71,8 +71,11 @@ export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProp
     const outputCostUSD = (estimatedTokensOut / 1000000) * outputCostPer1M;
     const totalCostUSD = inputCostUSD + outputCostUSD;
     
+    // Use real FX rate if available, otherwise fallback
     let totalCostINR = totalCostUSD * 84; // Fallback rate
-    if (rates.USD && typeof rates.USD.rate === 'number') {
+    if (modelsFx?.usdToInr) {
+      totalCostINR = totalCostUSD * modelsFx.usdToInr;
+    } else if (rates.USD && typeof rates.USD.rate === 'number') {
       totalCostINR = totalCostUSD * rates.USD.rate;
     }
     

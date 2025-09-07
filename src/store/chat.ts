@@ -1,5 +1,8 @@
 import { create } from 'zustand';
-import { useConversationsStore } from './conversations';
+import { useConversationsStore } from "./conversations";
+import { useAuthStore } from "./auth";
+// import { backendApi } from "@/adapters/backend";
+import { startRealTimeStream } from "@/services/streamingService";
 
 export interface Message {
   role: 'user' | 'assistant';
@@ -17,6 +20,8 @@ export interface ChatState {
   error: string | null;
   wallet: { inr: number };
   isLoadingWallet: boolean;
+  walletBalance: number;
+  isStreaming: boolean;
   
   // Stream control
   streamController: AbortController | null;
@@ -47,6 +52,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   error: null,
   wallet: { inr: 0.00 },
   isLoadingWallet: false,
+  walletBalance: 0,
+  isStreaming: false,
   streamController: null,
 
   // Actions
@@ -149,72 +156,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    console.log('Starting stream with:', { 
+    console.log('Starting real-time stream with:', { 
       modelId, 
       messageLength: userMessage.length, 
       costINR: cost.inr 
     });
 
-    set({ phase: 'executing', error: null });
+    // Create abort controller for stream cancellation
+    const controller = new AbortController();
+    set({ 
+      phase: 'executing', 
+      error: null, 
+      isStreaming: true,
+      streamController: controller 
+    });
 
     try {
-      console.log('Confirming chat with backend...');
-      
-      const backendAdapter = await import('../adapters/backend');
-      const confirmResult = await backendAdapter.postChatConfirm({
-        message: userMessage,
-        model: modelId,
-        estCostINR: cost.inr
-      });
-
-      console.log('Chat confirm response:', confirmResult);
-
-      if (!confirmResult.ok) {
-        // Handle provider failure - wallet already rolled back
-        console.error('Chat confirm failed:', confirmResult.error);
-        
-        let errorMessage = 'Chat confirmation failed';
-        
-        // Better error parsing for BAD_INPUT and other provider errors
-        if (confirmResult.error === 'BAD_INPUT' || confirmResult.message?.includes('BAD_INPUT')) {
-          console.error('BAD_INPUT error for model:', modelId, confirmResult);
-          errorMessage = `Model "${modelId}" is not supported or misconfigured. Please try another model.`;
-        } else {
-          switch (confirmResult.error) {
-            case 'INSUFFICIENT_FUNDS':
-              errorMessage = 'Insufficient funds in your wallet. Please recharge to continue.';
-              break;
-            case 'NO_API_KEY':
-              errorMessage = 'Provider key not configured. Please contact support.';
-              break;
-            case 'RATE_LIMITED':
-              errorMessage = 'Too many requests. Please wait a moment and try again.';
-              break;
-            case 'SERVICE_UNAVAILABLE':
-              errorMessage = 'AI service is temporarily unavailable. Please try again later.';
-              break;
-            case 'UNAUTHORIZED':
-              errorMessage = 'Authentication failed. Please refresh and try again.';
-              break;
-            default:
-              errorMessage = confirmResult.message || 'Chat confirmation failed. Please try again.';
-          }
-        }
-        
-        set({ 
-          error: errorMessage,
-          phase: 'ready'
-        });
-        return;
-      }
-
-      // Update wallet balance
-      if (confirmResult.newBalanceINR !== undefined) {
-        set({ wallet: { inr: confirmResult.newBalanceINR } });
-      }
-
-      console.log('Chat confirmed successfully, starting stream simulation...');
-      
       // Add user message to current state
       set({ 
         messages: [...get().messages, { role: 'user', text: userMessage }],
@@ -223,8 +180,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       // Add user message to conversations store if it exists
       try {
-        const { appendLocalUserMessage } = useConversationsStore.getState();
-        const { activeChatId } = useConversationsStore.getState();
+        const { appendLocalUserMessage, activeChatId } = useConversationsStore.getState();
         if (activeChatId) {
           await appendLocalUserMessage(activeChatId, userMessage);
         }
@@ -232,71 +188,73 @@ export const useChatStore = create<ChatState>((set, get) => ({
         console.warn('Failed to add message to conversations store:', error);
       }
 
-      // Simulate progressive streaming of the assistant response
-      const assistantText = confirmResult.assistantText || 'Sorry, I could not generate a response.';
-      
       // Add empty assistant message first
       set({ 
         messages: [...get().messages, { role: 'assistant', text: '' }]
       });
 
-      // Add assistant message to conversations store
-      try {
-        const { activeChatId } = useConversationsStore.getState();
-        if (activeChatId) {
-          // The assistant message will be built progressively through streaming
-        }
-      } catch (error) {
-        console.warn('Failed to prepare assistant message in conversations store:', error);
-      }
-
-      // Stream the response progressively (simulate typewriter effect)
-      let currentText = '';
-      const words = assistantText.split(' ');
-      
-      for (let i = 0; i < words.length; i++) {
-        currentText += (i === 0 ? '' : ' ') + words[i];
-        
-        // Update local state
-        const { updateLastMessage } = get();
-        updateLastMessage(' ' + words[i]);
-        
-        // Update conversations store if available
-        try {
-          const { appendLocalAssistantDelta, activeChatId } = useConversationsStore.getState();
-          if (activeChatId) {
-            appendLocalAssistantDelta(activeChatId, ' ' + words[i]);
+      // Start real-time streaming
+      await startRealTimeStream(
+        modelId,
+        userMessage,
+        {
+          onDelta: (delta: string) => {
+            const { updateLastMessage } = get();
+            updateLastMessage(delta);
+            
+            // Update conversations store
+            try {
+              const { appendLocalAssistantDelta, activeChatId } = useConversationsStore.getState();
+              if (activeChatId) {
+                appendLocalAssistantDelta(activeChatId, delta);
+              }
+            } catch (error) {
+              console.warn('Failed to update message in conversations store:', error);
+            }
+          },
+          onCost: (tokensIn: number, tokensOut: number, cost: number) => {
+            console.log('Real-time cost update:', { tokensIn, tokensOut, cost });
+          },
+          onDone: async (data: any) => {
+            console.log('Streaming completed:', data);
+            
+            // Finalize assistant message in conversations store
+            try {
+              const { finalizeAssistantMessage, activeChatId } = useConversationsStore.getState();
+              if (activeChatId && data.tokensIn && data.tokensOut) {
+                await finalizeAssistantMessage(activeChatId, data.tokensIn, data.tokensOut);
+              }
+            } catch (error) {
+              console.warn('Failed to finalize message in conversations store:', error);
+            }
+            
+            set({ 
+              phase: 'ready',
+              error: null,
+              isStreaming: false,
+              streamController: null
+            });
+          },
+          onError: (error: string) => {
+            console.error('Streaming error:', error);
+            set({ 
+              error,
+              phase: 'ready',
+              isStreaming: false,
+              streamController: null
+            });
           }
-        } catch (error) {
-          console.warn('Failed to update message in conversations store:', error);
-        }
-        
-        // Small delay to simulate streaming
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-
-      console.log('Chat execution completed successfully');
-      
-      // Finalize assistant message in conversations store
-      try {
-        const { finalizeAssistantMessage, activeChatId } = useConversationsStore.getState();
-        if (activeChatId) {
-          await finalizeAssistantMessage(activeChatId, confirmResult.tokensIn, confirmResult.tokensOut);
-        }
-      } catch (error) {
-        console.warn('Failed to finalize message in conversations store:', error);
-      }
-      
-      set({ 
-        phase: 'ready',
-        error: null
-      });
+        },
+        controller.signal
+      );
 
     } catch (error) {
       console.error('Chat execution failed:', error);
       set({ 
         error: error instanceof Error ? error.message : 'Network error',
-        phase: 'ready'
+        phase: 'ready',
+        isStreaming: false,
+        streamController: null
       });
     }
   },
@@ -306,9 +264,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (streamController) {
       streamController.abort();
       set({ 
-        phase: 'idle',
+        phase: 'ready',
+        isStreaming: false,
         streamController: null
       });
+      console.log('🛑 Stream stopped by user');
     }
   },
 
@@ -322,6 +282,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     tags: [],
     messages: [],
     error: null,
+    isStreaming: false,
     streamController: null
   }),
 
@@ -356,6 +317,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const walletData = await backendAdapter.getWallet();
       set({ 
         wallet: { inr: walletData.balance_inr },
+        walletBalance: walletData.balance_inr,
         isLoadingWallet: false 
       });
     } catch (error) {

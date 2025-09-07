@@ -10,31 +10,11 @@ import { LoadingAnimation } from "./LoadingAnimation";
 import { MessageCostDisplay } from "./MessageCostDisplay";
 import { useModelsStore } from "@/store/models";
 
-const TypewriterText = ({ text, isComplete }: { text: string; isComplete: boolean }) => {
-  const [displayText, setDisplayText] = useState('');
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    if (currentIndex < text.length) {
-      const timer = setTimeout(() => {
-        setDisplayText(prev => prev + text[currentIndex]);
-        setCurrentIndex(prev => prev + 1);
-      }, 25); // 25ms per character for typewriter effect
-      
-      return () => clearTimeout(timer);
-    }
-  }, [currentIndex, text]);
-
-  useEffect(() => {
-    // Reset when text changes (new message)
-    setDisplayText('');
-    setCurrentIndex(0);
-  }, [text]);
-
+const StreamingText = ({ text, isStreaming }: { text: string; isStreaming: boolean }) => {
   return (
     <span>
-      {displayText}
-      {!isComplete && currentIndex < text.length && (
+      {text}
+      {isStreaming && (
         <span className="animate-cursor-blink ml-0.5">|</span>
       )}
     </span>
@@ -46,10 +26,15 @@ const Transcript = () => {
     activeChatId, 
     messagesByChat, 
     streamingMessage, 
-    isStreaming,
-    loadMoreMessages 
+    isStreaming: conversationStreaming,
+    loadMoreMessages
   } = useConversationsStore();
-  const { phase } = useChatStore();
+  const { models } = useModelsStore();
+  const { isStreaming: chatStreaming, stopStream, phase } = useChatStore();
+  
+  // Unified streaming state
+  const isStreaming = conversationStreaming || chatStreaming;
+  
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const [showLoadMore, setShowLoadMore] = useState(false);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
@@ -68,55 +53,57 @@ const Transcript = () => {
     const scrollHeight = target.scrollHeight;
     const clientHeight = target.clientHeight;
     
-    // Calculate how far from bottom (as percentage)
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    const scrollPercentage = (distanceFromBottom / scrollHeight) * 100;
+    const isNearTop = scrollTop < 100;
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50;
     
-    // Show load more button when near top
-    setShowLoadMore(scrollTop < 100 && hasMoreMessages);
+    setShowLoadMore(isNearTop && hasMoreMessages);
+    setShowJumpToBottom(!isAtBottom && messages.length > 0);
     
-    // Show jump to bottom when user has scrolled up >10%
-    const shouldShowJump = scrollPercentage > 10;
-    setShowJumpToBottom(shouldShowJump);
-    setUserHasScrolled(shouldShowJump);
-  }, [hasMoreMessages]);
+    if (scrollTop > 100) {
+      setUserHasScrolled(true);
+    }
+  }, [hasMoreMessages, messages.length]);
 
-  // Auto-scroll to bottom when new messages arrive (only if user hasn't scrolled up)
+  // Auto-scroll to bottom for new messages (but not when user is scrolled up)
   useEffect(() => {
-    const newMessageCount = messages.length + (streamingMessage ? 1 : 0);
-    const hasNewContent = newMessageCount > lastMessageCount;
-    
-    if (hasNewContent && !userHasScrolled && scrollAreaRef.current) {
-      const scrollElement = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollElement) {
-        scrollElement.scrollTop = scrollElement.scrollHeight;
+    if (messages.length > lastMessageCount && !userHasScrolled && scrollAreaRef.current) {
+      const scrollArea = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollArea) {
+        scrollArea.scrollTop = scrollArea.scrollHeight;
       }
     }
-    
-    setLastMessageCount(newMessageCount);
-  }, [messages.length, streamingMessage, userHasScrolled, lastMessageCount]);
+    setLastMessageCount(messages.length);
+  }, [messages.length, lastMessageCount, userHasScrolled]);
 
-  const handleLoadMore = () => {
-    if (activeChatId && hasMoreMessages && !isLoadingMore) {
-      loadMoreMessages(activeChatId);
+  // Auto-scroll during streaming if user hasn't manually scrolled
+  useEffect(() => {
+    if (isStreaming && !userHasScrolled && scrollAreaRef.current) {
+      const scrollArea = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollArea) {
+        scrollArea.scrollTop = scrollArea.scrollHeight;
+      }
+    }
+  }, [isStreaming, userHasScrolled, streamingMessage]);
+
+  const handleLoadMore = async () => {
+    if (activeChatId && !isLoadingMore) {
+      await loadMoreMessages(activeChatId);
     }
   };
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = () => {
+    setUserHasScrolled(false);
     if (scrollAreaRef.current) {
-      const scrollElement = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollElement) {
-        scrollElement.scrollTo({
-          top: scrollElement.scrollHeight,
+      const scrollArea = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollArea) {
+        scrollArea.scrollTo({
+          top: scrollArea.scrollHeight,
           behavior: 'smooth'
         });
-        setUserHasScrolled(false);
-        setShowJumpToBottom(false);
       }
     }
-  }, []);
+  };
 
-  // Handle keyboard navigation for jump to bottom button
   const handleJumpKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -169,60 +156,69 @@ const Transcript = () => {
                   className="h-8 focus:ring-2 focus:ring-accent focus:ring-offset-2"
                   aria-label={isLoadingMore ? 'Loading earlier messages' : 'Load earlier messages in conversation'}
                 >
-                  <ChevronUp className="h-4 w-4 mr-2" />
-                  {isLoadingMore ? 'Loading...' : 'Load earlier messages'}
+                  {isLoadingMore ? (
+                    <>
+                      <LoadingAnimation message="" />
+                      <span className="ml-2">Loading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronUp size={14} className="mr-1" />
+                      Load earlier messages
+                    </>
+                  )}
                 </Button>
               </div>
             )}
 
-            <AnimatePresence>
+            {/* Messages */}
+            <AnimatePresence initial={false}>
               {messages.map((message) => (
-                <motion.div 
+                <motion.div
                   key={message.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3 }}
                   className="flex gap-3"
                   role="article"
-                  aria-label={`${message.role === 'user' ? 'Your' : 'Assistant'} message`}
+                  aria-label={`${message.role === 'user' ? 'You' : 'Assistant'} message`}
                 >
                   <div className="flex-shrink-0">
                     {message.role === 'user' ? (
-                      <div className="w-8 h-8 bg-brown rounded-full flex items-center justify-center shadow-brand">
-                        <User size={16} className="text-brown-foreground" />
+                      <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <User size={16} />
                       </div>
                     ) : (
-                      <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center shadow-brand">
-                        <Bot size={16} className="text-accent-foreground" />
+                      <div className="w-8 h-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center">
+                        <Bot size={16} />
                       </div>
                     )}
                   </div>
-                  
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-sm font-medium mb-1 text-muted-foreground">
-                      <span>{message.role === 'user' ? 'You' : 'Assistant'}</span>
-                      {message.role === 'assistant' && message.model_id && (
-                        <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded-full">
-                          {useModelsStore.getState().getModelById(message.model_id)?.label || message.model_id}
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium">
+                        {message.role === 'user' ? 'You' : 'Assistant'}
+                      </span>
+                      {message.role === 'assistant' && (
+                        <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          Assistant
                         </span>
                       )}
                     </div>
                     <div className="text-sm text-foreground whitespace-pre-wrap">
                       {message.content}
                     </div>
-                     {(message.tokensIn > 0 || message.tokensOut > 0) && (
-                        <div className="text-xs text-muted-foreground mt-1" aria-label="Token usage">
-                          {message.tokensIn > 0 && message.tokensOut > 0 && message.model_id ? (
-                            <MessageCostDisplay
-                              tokensIn={message.tokensIn}
-                              tokensOut={message.tokensOut}
-                              modelId={message.model_id}
-                            />
-                          ) : (
+                    {message.role === 'assistant' && (
+                        <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+                          {(message.tokensIn || message.tokensOut) && (
                             <>
-                              {message.tokensIn > 0 && `${message.tokensIn} tokens in`}
-                              {message.tokensIn > 0 && message.tokensOut > 0 && ' • '}
-                              {message.tokensOut > 0 && `${message.tokensOut} tokens out`}
+                              <MessageCostDisplay 
+                                modelId={'unknown'} 
+                                tokensIn={message.tokensIn} 
+                                tokensOut={message.tokensOut}
+                                className="text-xs"
+                              />
                             </>
                           )}
                         </div>
@@ -242,18 +238,31 @@ const Transcript = () => {
                   aria-label="Assistant is responding"
                 >
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center shadow-brand">
-                      <Bot size={16} className="text-accent-foreground" />
+                    <div className="w-8 h-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center">
+                      <Bot size={16} />
                     </div>
                   </div>
-                  
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium mb-1 text-muted-foreground">
-                      Assistant
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium">Assistant</span>
                     </div>
                     <div className="text-sm text-foreground whitespace-pre-wrap">
-                      <TypewriterText text={streamingMessage} isComplete={phase !== 'executing'} />
+                      <StreamingText text={streamingMessage} isStreaming={isStreaming} />
                     </div>
+                    
+                    {/* Stop streaming button */}
+                    {chatStreaming && (
+                      <div className="mt-2">
+                        <Button
+                          onClick={stopStream}
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                        >
+                          Stop Generation
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -291,11 +300,10 @@ const Transcript = () => {
               onKeyDown={handleJumpKeyDown}
               variant="secondary"
               size="sm"
-              className="shadow-lg focus:ring-2 focus:ring-accent focus:ring-offset-2 bg-background/95 backdrop-blur-sm border border-border/50 hover:bg-accent/90"
+              className="shadow-lg hover:shadow-xl transition-shadow focus:ring-2 focus:ring-accent focus:ring-offset-2"
               aria-label="Jump to newest message in conversation"
-              tabIndex={0}
             >
-              <ChevronDown className="h-4 w-4 mr-2" />
+              <ChevronDown size={14} className="mr-1" />
               Jump to newest
             </Button>
           </motion.div>

@@ -42,12 +42,14 @@ export default async function handler(req: Request): Promise<Response> {
     console.log('📥 Request data:', { ...requestData, message: requestData.message?.substring(0, 100) + '...' });
 
     // Process validation and wallet deduction
-    const context: ChatContext = await processCommonValidation({
-      corrId,
-      userId,
+    const supportedModels = ['gpt-4o', 'gpt-4o-mini', 'claude-3-haiku-20240307', 'claude-3-sonnet-20240229', 'claude-3-opus-20240229', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    const context: ChatContext = await processCommonValidation(
       supabaseClient,
-      request: requestData
-    });
+      userId,
+      corrId,
+      requestData,
+      supportedModels
+    );
     console.log('✅ Validation completed, proceeding with streaming');
 
     // Determine provider
@@ -153,7 +155,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   } catch (error) {
     console.error('❌ Chat stream setup failed:', error);
-    return createErrorResponse(error, 500, "");
+    return createErrorResponse("", error);
   }
 }
 

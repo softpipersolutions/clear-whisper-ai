@@ -21,11 +21,8 @@ export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProp
 
   // Calculate cost directly from model pricing with estimated 4000 tokens (2000 in, 2000 out)
   const calculateCost = () => {
-    if (!user?.user_metadata?.preferred_currency) {
-      return null;
-    }
-
-    const currency = user.user_metadata.preferred_currency;
+    // Default to INR if no preferred currency is set
+    const currency = user?.user_metadata?.preferred_currency || 'INR';
     const estimatedTokensIn = 2000;
     const estimatedTokensOut = 2000;
     

@@ -346,7 +346,6 @@ async function handleCostEstimate(req: Request, corrId: string): Promise<Respons
     return createStructuredError('ESTIMATION_FAILED', error.message, corrId, 500);
   }
 }
-}
 
 serve(async (req) => {
   const corrId = crypto.randomUUID();

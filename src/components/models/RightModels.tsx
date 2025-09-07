@@ -336,13 +336,15 @@ const RightModels = () => {
                          )}
                        </div>
                        
-                       {/* Exact cost for current query */}
-                       {cost && (
-                         <ModelCostDisplay 
-                           model={model} 
-                           className="text-xs"
-                         />
-                       )}
+                        {/* Exact cost for current query */}
+                        {cost && (
+                          <ModelCostDisplay 
+                            model={model} 
+                            message={query}
+                            tags={tags}
+                            className="text-xs"
+                          />
+                        )}
                      </div>
                   </CardContent>
                 </Card>

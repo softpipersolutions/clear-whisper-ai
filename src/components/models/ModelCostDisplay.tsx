@@ -11,20 +11,33 @@ interface ModelCostDisplayProps {
       outputPer1M: number;
     };
   };
+  message?: string;
+  tags?: string[];
   className?: string;
 }
 
-export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProps) {
+export function ModelCostDisplay({ model, message, tags, className = "" }: ModelCostDisplayProps) {
   const { user } = useAuthStore();
   const { rates, convertFromINR } = useFxStore();
   const { pricing: modelPricing } = useModelsStore();
 
-  // Calculate cost directly from model pricing with estimated 4000 tokens (2000 in, 2000 out)
+  // Calculate cost directly from model pricing with dynamic token estimation
   const calculateCost = () => {
     // Default to INR if no preferred currency is set
     const currency = user?.user_metadata?.preferred_currency || 'INR';
-    const estimatedTokensIn = 2000;
-    const estimatedTokensOut = 2000;
+    
+    // Estimate input tokens based on string length
+    const estimatedTokensIn = message ? Math.ceil(message.length / 4) + 30 : 2000;
+    // +30 for system / overhead tokens
+
+    // Choose output multiplier based on tags
+    let multiplier = 1.3; // default
+    if (tags?.includes("quick")) multiplier = 0.8;
+    if (tags?.includes("code")) multiplier = 1.2;
+    if (tags?.includes("reasoning")) multiplier = 1.5;
+
+    // Estimate output tokens
+    const estimatedTokensOut = message ? Math.ceil(estimatedTokensIn * multiplier) : 2000;
     
     // Get pricing - prefer from pricing store, fallback to model's USD pricing
     const modelPricingData = modelPricing?.rates?.[model.id];

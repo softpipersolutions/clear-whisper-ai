@@ -25,34 +25,6 @@ export interface EstimateResponse {
   displayCurrency: string;
 }
 
-export interface CostEstimateResponse {
-  tokens: {
-    input: number;
-    output: number;
-    method: string;
-    confidence: string;
-  };
-  fx: {
-    usdToInr: number;
-    fetchedAt: string;
-    stale: boolean;
-  };
-  costs: Array<{
-    modelId: string;
-    provider: string;
-    costUSD: number;
-    costINR: number;
-    breakdown: {
-      inputCost: number;
-      outputCost: number;
-    };
-  }>;
-  totalCostUSD: number;
-  totalCostINR: number;
-  timestamp: string;
-  requestId: string;
-}
-
 export interface AnalyzeResponse {
   tags: string[];
   recommended: Array<{
@@ -225,36 +197,6 @@ export const postEstimate = async (
   history: Array<{ role: string; content: string }> = []
 ): Promise<EstimateResponse> => {
   return callFunction<EstimateResponse>('estimate', { message, history });
-};
-
-export const postCostEstimate = async (
-  message: string, 
-  history: Array<{ role: string; content: string }> = [],
-  requestedModels?: string[]
-): Promise<CostEstimateResponse> => {
-  console.log('🚀 Calling cost-estimate function with:', { 
-    messageLength: message.length, 
-    historyLength: history.length,
-    requestedModels: requestedModels?.length || 'all'
-  });
-  
-  try {
-    const result = await callFunction<CostEstimateResponse>('cost-estimate', { 
-      message, 
-      history,
-      requestedModels 
-    });
-    console.log('✅ Cost-estimate function returned:', {
-      totalCostINR: result.totalCostINR,
-      totalCostUSD: result.totalCostUSD,
-      costsCount: result.costs?.length,
-      tokens: result.tokens
-    });
-    return result;
-  } catch (error) {
-    console.error('❌ Cost-estimate function failed:', error);
-    throw error;
-  }
 };
 
 export const postAnalyze = async (

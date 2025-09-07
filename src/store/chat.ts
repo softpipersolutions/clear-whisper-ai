@@ -17,7 +17,6 @@ export interface ChatState {
   error: string | null;
   wallet: { inr: number };
   isLoadingWallet: boolean;
-  costEstimateData: any | null;
   
   // Stream control
   streamController: AbortController | null;
@@ -49,7 +48,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   wallet: { inr: 0.00 },
   isLoadingWallet: false,
   streamController: null,
-  costEstimateData: null,
 
   // Actions
   setQuery: (query) => set({ query }),
@@ -79,52 +77,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
 
         // Call backend services in parallel with timeout
-        console.log('📊 Starting cost estimation and analysis...');
-        const [costEstimateResult, analyzeResult] = await Promise.all([
-          backendAdapter.postCostEstimate(query, history),
+        const [estimateResult, analyzeResult] = await Promise.all([
+          backendAdapter.postEstimate(query, history),
           backendAdapter.postAnalyze(query, history)
         ]);
 
-        console.log('✅ Backend response received:', { 
-          costEstimate: {
-            totalCostINR: costEstimateResult.totalCostINR,
-            totalCostUSD: costEstimateResult.totalCostUSD,
-            costsLength: costEstimateResult.costs?.length,
-            tokens: costEstimateResult.tokens,
-            fx: costEstimateResult.fx
-          }, 
-          analyze: analyzeResult 
-        });
+        console.log('Backend response:', { estimateResult, analyzeResult });
         
         set({
           cost: { 
-            display: costEstimateResult.totalCostINR, 
-            inr: costEstimateResult.totalCostINR 
+            display: estimateResult.estCostDisplay, 
+            inr: estimateResult.estCostINR 
           },
           tags: analyzeResult.tags,
-          phase: 'ready',
-          costEstimateData: costEstimateResult
+          phase: 'ready'
         });
       } catch (backendError) {
-        console.warn('⚠️ Backend cost-estimate call failed, falling back to mocks:', backendError);
-        console.error('📄 Full backend error details:', {
-          type: (backendError as any)?.type,
-          message: (backendError as any)?.message,
-          originalError: (backendError as any)?.originalError
-        });
+        console.warn('Backend call failed, falling back to mocks:', backendError);
         
         // Fallback to mock services
         const tokens = mockServices.estimateTokens(query);
         const costINR = mockServices.estimateCostINR(tokens);
         const tags = mockServices.inferTags(query);
         
-        console.log('🔄 Using mock fallback:', { tokens, costINR, tags });
-        
         set({
           cost: { display: costINR, inr: costINR },
           tags,
-          phase: 'ready',
-          costEstimateData: null // Clear old data when using fallback
+          phase: 'ready'
         });
       }
     } catch (error) {
@@ -343,8 +322,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     tags: [],
     messages: [],
     error: null,
-    streamController: null,
-    costEstimateData: null
+    streamController: null
   }),
 
   addMessage: (message) => set({ 

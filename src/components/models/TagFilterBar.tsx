@@ -140,8 +140,8 @@ export const TagFilterBar = memo(({
         </span>
       </h3>
       
-      <ScrollArea className="w-full">
-        <div className="flex gap-2 pb-2">
+      <div className="w-full overflow-x-auto overflow-y-hidden">
+        <div className="flex gap-2 pb-2 min-w-max">
           <AnimatePresence>
             {filterTags.map((tag, index) => {
               const isActive = activeFilter === tag.id;
@@ -160,24 +160,26 @@ export const TagFilterBar = memo(({
                     stiffness: 300,
                     damping: 30
                   }}
-                  whileHover={!isActive ? { scale: 1.05 } : undefined}
+                  whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
                   <Badge
                     variant={isActive ? "default" : "outline"}
                     className={`
-                      cursor-pointer whitespace-nowrap
+                      cursor-pointer transition-all duration-300 whitespace-nowrap
                       text-xs font-medium px-3 py-2 rounded-full
                       border border-border/20
+                      ${!isActive ? tag.gradient : ''}
+                      ${!isActive ? tag.hoverGradient : ''}
                       ${isActive 
-                        ? 'bg-neon-orange text-neon-orange-foreground border-neon-orange/50 shadow-neon animate-pulse-glow' 
-                        : `${tag.gradient} ${tag.hoverGradient} hover:shadow-lg hover:border-border/40 transition-all duration-300`
+                        ? 'bg-neon-orange text-neon-orange-foreground shadow-neon animate-pulse-glow border-neon-orange/50' 
+                        : 'hover:shadow-lg hover:border-border/40'
                       }
                       ${tag.dynamic ? 'animate-fade-in-up' : ''}
                     `}
-                    style={isActive ? {
+                    style={{
                       '--glow-color': tag.glowColor,
-                    } as React.CSSProperties : undefined}
+                    } as React.CSSProperties}
                     onClick={() => onFilterChange(tag.id)}
                   >
                     <span className="flex items-center gap-1.5">
@@ -194,7 +196,7 @@ export const TagFilterBar = memo(({
             })}
           </AnimatePresence>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 });

@@ -1,5 +1,4 @@
 import { motion } from "framer-motion";
-import { useChatStore } from "@/store/chat";
 import { useAuthStore } from "@/store/auth";
 import { useFxStore } from "@/store/fx";
 import { useModelsStore } from "@/store/models";
@@ -16,32 +15,48 @@ interface ModelCostDisplayProps {
 }
 
 export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProps) {
-  const { cost } = useChatStore();
   const { user } = useAuthStore();
-  const { rates } = useFxStore();
+  const { rates, convertFromINR } = useFxStore();
   const { pricing: modelPricing } = useModelsStore();
 
-  // Calculate exact cost for current query with timeout fallback
+  // Calculate cost directly from model pricing with estimated 4000 tokens (2000 in, 2000 out)
   const calculateCost = () => {
-    if (!cost || !user?.user_metadata?.preferred_currency) {
+    if (!user?.user_metadata?.preferred_currency) {
       return null;
     }
 
     const currency = user.user_metadata.preferred_currency;
+    const estimatedTokensIn = 2000;
+    const estimatedTokensOut = 2000;
+    
+    // Get pricing - prefer from pricing store, fallback to model's USD pricing
+    const modelPricingData = modelPricing?.rates?.[model.id];
+    const inputCostPer1M = modelPricingData?.inputPer1M || model.pricingUSD.inputPer1M;
+    const outputCostPer1M = modelPricingData?.outputPer1M || model.pricingUSD.outputPer1M;
+    
+    const inputCostUSD = (estimatedTokensIn / 1000000) * inputCostPer1M;
+    const outputCostUSD = (estimatedTokensOut / 1000000) * outputCostPer1M;
+    const totalCostUSD = inputCostUSD + outputCostUSD;
+    
+    // Convert USD to INR first (our base currency)
+    let totalCostINR = totalCostUSD * 84; // Fallback rate if FX unavailable
+    if (rates.USD && typeof rates.USD.rate === 'number') {
+      totalCostINR = totalCostUSD / rates.USD.rate; // Convert USD to INR
+    }
     
     // For INR, use cost directly
     if (currency === 'INR') {
       return {
-        cost: cost.inr,
+        cost: totalCostINR,
         currency: '₹',
-        formatted: `₹${cost.inr.toFixed(cost.inr < 0.01 ? 4 : 2)}`
+        formatted: `₹${totalCostINR.toFixed(totalCostINR < 0.01 ? 4 : 2)}`
       };
     }
     
     // For other currencies, try to convert or fallback to INR
     if (rates[currency]) {
-      const convertedCost = cost.inr / rates[currency].rate;
-      const currencySymbol = currency === 'USD' ? '$' : currency;
+      const convertedCost = convertFromINR(totalCostINR, currency);
+      const currencySymbol = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : currency;
       
       return {
         cost: convertedCost,
@@ -52,9 +67,9 @@ export function ModelCostDisplay({ model, className = "" }: ModelCostDisplayProp
     
     // Fallback to INR if conversion not available
     return {
-      cost: cost.inr,
+      cost: totalCostINR,
       currency: '₹',
-      formatted: `₹${cost.inr.toFixed(cost.inr < 0.01 ? 4 : 2)} (estimated)`
+      formatted: `₹${totalCostINR.toFixed(totalCostINR < 0.01 ? 4 : 2)} (est)`
     };
   };
 

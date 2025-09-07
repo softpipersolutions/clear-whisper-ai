@@ -203,7 +203,7 @@ const Transcript = () => {
                       <span>{message.role === 'user' ? 'You' : 'Assistant'}</span>
                       {message.role === 'assistant' && message.model_id && (
                         <span className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded-full">
-                          {getModelById(message.model_id)?.name || message.model_id}
+                          {useModelsStore.getState().getModelById(message.model_id)?.label || message.model_id}
                         </span>
                       )}
                     </div>

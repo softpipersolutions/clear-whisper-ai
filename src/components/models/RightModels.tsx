@@ -12,6 +12,7 @@ import { IndianRupee, Clock, FileText, AlertCircle, Lock, Volume2 } from "lucide
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import { ModelCostDisplay } from "./ModelCostDisplay";
+import { triggerFxUpdate } from "@/utils/fx-trigger";
 
 const RightModels = () => {
   const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation, query, startStream } = useChatStore();
@@ -23,9 +24,25 @@ const RightModels = () => {
   // Get user's preferred currency
   const userCurrency = user?.user_metadata?.preferred_currency || 'INR';
   
-  // Fetch models and FX rate when component mounts
+  // Fetch models and initialize FX system
   useEffect(() => {
     fetchModels();
+    
+    // Initialize FX system on first load if no rates exist
+    if (Object.keys(rates).length === 0) {
+      console.log('Initializing FX system...');
+      triggerFxUpdate().then((success) => {
+        if (success) {
+          console.log('FX system initialized successfully');
+          // Fetch FX rates after successful update
+          if (userCurrency !== 'INR') {
+            fetchFxRate(userCurrency);
+          }
+        } else {
+          console.warn('Failed to initialize FX system');
+        }
+      });
+    }
   }, [fetchModels]);
   
   // Listen for NO_API_KEY errors to refresh models
@@ -228,9 +245,13 @@ const RightModels = () => {
                 <Card 
                   className={`cursor-pointer transition-all duration-200 rounded-2xl ${
                     selectedModel === model.id 
-                      ? 'ring-2 ring-accent bg-accent/5 shadow-brand-hover' 
+                      ? 'ring-2 ring-neon-orange bg-neon-orange/5 shadow-neon-hover' 
                       : model.locked
                       ? 'opacity-60 cursor-not-allowed shadow-brand'
+                      : model.provider === 'openai'
+                      ? 'hover:bg-blue-500/5 shadow-brand hover:shadow-[0_8px_25px_-5px_hsl(var(--blue-500)_/_0.25)] border border-blue-500/10'
+                      : model.provider === 'anthropic'
+                      ? 'hover:bg-neon-orange/5 shadow-brand hover:shadow-neon border border-neon-orange/10'
                       : 'hover:bg-muted/30 shadow-brand hover:shadow-brand-hover'
                   }`}
                   onClick={async () => {

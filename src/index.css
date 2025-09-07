@@ -49,11 +49,16 @@ All colors MUST be HSL.
 
     --radius: 1rem;
 
-    /* Enhanced shadows with neon orange */
+    /* Enhanced shadows with neon orange and provider colors */
     --shadow-brand: 0 4px 12px -2px hsl(var(--brown) / 0.1);
     --shadow-brand-hover: 0 8px 25px -5px hsl(var(--brown) / 0.25);
     --shadow-neon: 0 4px 20px -4px hsl(var(--neon-orange) / 0.3);
     --shadow-neon-hover: 0 8px 30px -6px hsl(var(--neon-orange) / 0.4);
+    
+    /* Provider-specific colors */
+    --blue-500: 217 91 60; /* Blue for OpenAI */
+    --blue-50: 217 91 95;
+    --blue-900: 217 91 15;
 
     --sidebar-background: 0 0 98;
     --sidebar-foreground: 240 5.3% 26.1%;

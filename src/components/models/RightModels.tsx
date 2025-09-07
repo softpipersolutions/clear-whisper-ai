@@ -337,7 +337,7 @@ const RightModels = () => {
                        </div>
                        
                         {/* Exact cost for current query */}
-                        {cost && (
+                        {query && (
                           <ModelCostDisplay 
                             model={model} 
                             message={query}

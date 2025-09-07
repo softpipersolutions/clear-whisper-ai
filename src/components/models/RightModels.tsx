@@ -15,7 +15,7 @@ import { ModelCostDisplay } from "./ModelCostDisplay";
 import { triggerFxUpdate } from "@/utils/fx-trigger";
 
 const RightModels = () => {
-  const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation, query, startStream } = useChatStore();
+  const { phase, cost, tags, selectedModel, selectModel, error, retryLastOperation, query, startStream, messages } = useChatStore();
   const [isStartingChat, setIsStartingChat] = useState<string | null>(null);
   const { user } = useAuthStore();
   const { convertFromINR, fetchFxRate, isStale, rates, error: fxError } = useFxStore();
@@ -337,10 +337,10 @@ const RightModels = () => {
                        </div>
                        
                         {/* Exact cost for current query */}
-                        {query && (
+                        {(query || messages.length > 0) && (
                           <ModelCostDisplay 
                             model={model} 
-                            message={query}
+                            message={query || messages[messages.length - 2]?.text || ""}
                             tags={tags}
                             className="text-xs"
                           />

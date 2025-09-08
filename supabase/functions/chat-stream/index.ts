@@ -7,13 +7,14 @@ import {
   type ChatContext,
   type ChatConfirmRequest
 } from "../_shared/chat-common.ts";
-import { 
+import {
   callOpenAI,
-  callAnthropic, 
+  callAnthropic,
   callGemini,
   resolveProvider,
   isProviderAvailable
 } from "../_shared/providers.ts";
+import { getModelCatalog } from "../_shared/catalog.ts";
 
 interface StreamEvent {
   type: 'delta' | 'done' | 'error' | 'cost';
@@ -47,8 +48,11 @@ export default async function handler(req: Request): Promise<Response> {
     const requestData: ChatConfirmRequest = await req.json();
     console.log('📥 Request data:', { ...requestData, message: requestData.message?.substring(0, 100) + '...' });
 
-    // Process validation and wallet deduction
-    const supportedModels = ['gpt-4o', 'gpt-4o-mini', 'claude-3-haiku-20240307', 'claude-3-sonnet-20240229', 'claude-3-opus-20240229', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    // Process validation and wallet deduction using dynamic model list
+    const supportedModels = getModelCatalog()
+      .filter(model => !model.locked)
+      .map(model => model.id);
+
     const context: ChatContext = await processCommonValidation(
       supabaseClient,
       userId,

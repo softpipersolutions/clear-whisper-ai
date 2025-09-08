@@ -1,5 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
 interface StreamEvent {
   type: 'delta' | 'done' | 'error' | 'cost';
   data?: any;
@@ -37,13 +40,13 @@ export async function startRealTimeStream(
 
     // Call the streaming edge function
     const response = await fetch(
-      `https://dxxovxcdbdkyhokusnaz.supabase.co/functions/v1/chat-stream`,
+      `${SUPABASE_URL}/functions/v1/chat-stream`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR4eG92eGNkYmRreWhva3VzbmF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxMzc3NDEsImV4cCI6MjA3MjcxMzc0MX0.Kq8VD8YUfbdtZUgn1gWk6FuU_Cs1nX8furJhOjiWZR8',
+          'apikey': SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
           model,

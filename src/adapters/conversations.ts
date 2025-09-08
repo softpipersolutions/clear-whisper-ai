@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+
 // Error types for normalized error handling
 export type ConversationErrorType = 'NETWORK' | 'TIMEOUT' | 'BACKEND' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'BAD_INPUT';
 
@@ -172,7 +174,7 @@ export const listChats = async (params: {
       throw new Error('UNAUTHORIZED: Not signed in');
     }
 
-    const response = await fetch(`https://dxxovxcdbdkyhokusnaz.supabase.co/functions/v1/${url}`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/${url}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${auth.session.access_token}`,
@@ -226,7 +228,7 @@ export const listMessages = async (params: {
       throw new Error('UNAUTHORIZED: Not signed in');
     }
 
-    const response = await fetch(`https://dxxovxcdbdkyhokusnaz.supabase.co/functions/v1/${url}`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/${url}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${auth.session.access_token}`,
